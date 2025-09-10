@@ -1,0 +1,218 @@
+import { useState, useEffect } from "react";
+import { FileText, Download, Edit3, CheckCircle2 } from "lucide-react";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { FilePreview } from "./FilePreview";
+import { JobQueue } from "./JobQueue";
+
+interface UploadedResume {
+  id: number;
+  original_name: string;
+  stored_name: string;
+  path: string;
+  size: number;
+  type: string;
+  created_at: string;
+}
+
+export function Dashboard() {
+  const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchUploadedResume();
+  }, []);
+  
+
+const fetchUploadedResume = async () => {
+  try {
+    const response = await fetch('/api/user/resume', {
+      credentials: 'include', // Include cookies
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.resume) {
+        setUploadedResume(data.resume);
+      }
+    } else if (response.status === 401) {
+      // User is not authenticated, handle accordingly
+      console.log('User not authenticated');
+    }
+  } catch (error) {
+    console.error('Error fetching resume:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getFileTypeDisplay = (mimeType: string) => {
+    const typeMap: { [key: string]: string } = {
+      'application/pdf': 'PDF',
+      'application/msword': 'DOC',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+      'image/jpeg': 'JPEG',
+      'image/png': 'PNG',
+      'image/gif': 'GIF',
+      'image/webp': 'WebP'
+    };
+    return typeMap[mimeType] || 'Unknown';
+  };
+
+  const handleDownloadResume = () => {
+    if (uploadedResume) {
+      // Create download link
+      const link = document.createElement('a');
+      link.href = `/storage/${uploadedResume.path}`;
+      link.download = uploadedResume.original_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleStartApplying = () => {
+    console.log('Starting application process...');
+    // This will trigger the bulk application process
+    alert('Starting to apply to all jobs! This feature is coming soon.');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="p-6 animate-pulse">
+              <div className="space-y-4">
+                <div className="h-6 bg-muted rounded w-1/2"></div>
+                <div className="h-32 bg-muted rounded"></div>
+              </div>
+            </Card>
+            <Card className="p-6 animate-pulse">
+              <div className="space-y-4">
+                <div className="h-6 bg-muted rounded w-1/2"></div>
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-24 bg-muted rounded"></div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 p-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold text-card-foreground">Welcome to Your Job Dashboard</h1>
+          <p className="text-muted-foreground">
+            Your resume is ready. Let's find you the perfect job opportunities.
+          </p>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column - Resume Preview */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold text-card-foreground">Your Resume</h2>
+              <Badge variant="outline" className="flex items-center gap-2">
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+                Ready
+              </Badge>
+            </div>
+
+            {uploadedResume ? (
+              <Card className="p-6">
+                <div className="space-y-4">
+                  {/* File Info */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex-shrink-0 p-3 bg-primary/10 rounded-lg">
+                      <FileText className="h-8 w-8 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-card-foreground truncate">
+                        {uploadedResume.original_name}
+                      </p>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span>{formatFileSize(uploadedResume.size)}</span>
+                        <span>•</span>
+                        <span>{getFileTypeDisplay(uploadedResume.type)}</span>
+                      </div>
+                    </div>
+                    <Badge variant="secondary">
+                      {getFileTypeDisplay(uploadedResume.type)}
+                    </Badge>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 pt-4 border-t border-border">
+                    <Button
+                      variant="outline"
+                      onClick={handleDownloadResume}
+                      className="flex-1"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <Edit3 className="h-4 w-4 mr-2" />
+                      Replace
+                    </Button>
+                  </div>
+
+                  {/* File Preview Area */}
+                  <div className="mt-6 p-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        Resume preview will appear here
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Advanced preview coming soon
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ) : (
+              <Card className="p-6 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No resume found</p>
+                <Button variant="outline" className="mt-4">
+                  Upload Resume
+                </Button>
+              </Card>
+            )}
+          </div>
+
+          {/* Right Column - Job Queue */}
+          <div>
+            <JobQueue onStartApplying={handleStartApplying} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
