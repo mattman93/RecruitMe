@@ -18,6 +18,11 @@ Route::prefix('api')->group(function () {
     Route::post('/login', [\App\Http\Controllers\Api\AuthController::class, 'login']);
     Route::post('/register', [\App\Http\Controllers\Api\AuthController::class, 'register']);
     Route::post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
+    
+    // Session-dependent routes
+    Route::middleware(['auth'])->group(function () {
+        Route::post('/user/claim-guest-uploads', [\App\Http\Controllers\Api\AuthController::class, 'claimGuestUploads']);
+    });
 });
 
 Route::get('/', function () {

@@ -76,7 +76,7 @@ const fetchUploadedResume = async () => {
     if (uploadedResume) {
       // Create download link
       const link = document.createElement('a');
-      link.href = `/storage/${uploadedResume.path}`;
+      link.href = `/api/user/file/${uploadedResume.id}`;
       link.download = uploadedResume.original_name;
       document.body.appendChild(link);
       link.click();
@@ -183,16 +183,14 @@ const fetchUploadedResume = async () => {
                   </div>
 
                   {/* File Preview Area */}
-                  <div className="mt-6 p-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
-                    <div className="text-center py-8">
-                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Resume preview will appear here
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Advanced preview coming soon
-                      </p>
-                    </div>
+                  <div className="mt-6">
+                    <FilePreview 
+                      fileUrl={`/api/user/file/${uploadedResume.id}`}
+                      fileName={uploadedResume.original_name}
+                      fileType={uploadedResume.type}
+                      fileSize={uploadedResume.size}
+                      uploadedAt={new Date(uploadedResume.created_at).toLocaleDateString()}
+                    />
                   </div>
                 </div>
               </Card>

@@ -17,5 +17,6 @@ Route::get('/guest/resume-preview/{sessionId}', [GuestUploadController::class, '
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/leads', [LeadController::class, 'index']);
     Route::get('/user/resume', [UserController::class, 'getResume']);
-    Route::post('/user/claim-guest-uploads', [AuthController::class, 'claimGuestUploads']);
+    Route::get('/user/files', [UserController::class, 'getAllFiles']);
+    Route::get('/user/file/{id}', [UserController::class, 'downloadFile']);
 });

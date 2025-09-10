@@ -6,27 +6,27 @@
   --font-size: 16px;
   --font-family: 'Inter', system-ui, -apple-system, sans-serif;
   
-  /* Custom Color Palette */
+  /* Custom Color Palette - Maximum Contrast for Readability */
   --mint-green: #3ED6A7;
   --navy: #1E2A38;
-  --light-gray: #F7F9FA;
+  --light-gray: #F8FAFC;
   --coral: #FF6B6B;
   --lavender: #9B8FFF;
-  --dark-gray: #4A5568;
+  --dark-gray: #1A202C;        /* Maximum contrast: Very dark */
   --lighter-gray: #E2E8F0;
-  --medium-gray: #718096;
+  --medium-gray: #2D3748;      /* Much darker for excellent readability */
   
-  /* Design System Variables */
+  /* Design System Variables - Enhanced Contrast */
   --background: var(--light-gray);
   --foreground: var(--dark-gray);
-  --card: #ffffff;
+  --card: #FFFFFF;
   --card-foreground: var(--dark-gray);
-  --popover: #ffffff;
+  --popover: #FFFFFF;
   --popover-foreground: var(--dark-gray);
   --primary: var(--mint-green);
-  --primary-foreground: #ffffff;
+  --primary-foreground: #FFFFFF;
   --secondary: var(--navy);
-  --secondary-foreground: #ffffff;
+  --secondary-foreground: #FFFFFF;
   --muted: var(--lighter-gray);
   --muted-foreground: var(--medium-gray);
   --accent: var(--mint-green);
@@ -244,4 +244,170 @@ body {
 
 .btn-secondary-lavender:hover {
   background-color: #8B7DFF;
+}
+
+/* Enhanced Typography for Better Readability */
+.text-enhanced {
+  color: var(--dark-gray) !important;
+  font-weight: 500;
+}
+
+.text-enhanced-muted {
+  color: var(--medium-gray) !important;
+  font-weight: 400;
+}
+
+/* Dashboard specific enhancements */
+.dashboard-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dashboard-text {
+  color: var(--dark-gray);
+  font-weight: 500;
+}
+
+/* Smart text visibility - Different colors for different backgrounds */
+
+/* Default text colors for light backgrounds */
+.text-card-foreground {
+  color: #1A202C !important; 
+  font-weight: 500 !important;
+}
+
+.text-muted-foreground {
+  color: #4A5568 !important; 
+  font-weight: 400 !important;
+}
+
+/* Navy gradient backgrounds - Light text on dark background (first pass) */
+.navy-gradient {
+  color: #E2E8F0; /* Light gray base color */
+}
+
+.navy-gradient .text-card-foreground,
+.navy-gradient h1,
+.navy-gradient h2,
+.navy-gradient h3,
+.navy-gradient .font-semibold,
+.navy-gradient .font-medium,
+.navy-gradient .font-bold,
+.navy-gradient .badge,
+.navy-gradient [data-slot="badge"] {
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+}
+
+.navy-gradient .text-muted-foreground,
+.navy-gradient p,
+.navy-gradient div,
+.navy-gradient span,
+.navy-gradient .text-secondary-foreground {
+  color: #E2E8F0 !important; /* Light gray for muted text on dark bg */
+}
+
+/* Badge specific override - Maximum specificity */
+.navy-gradient .badge,
+.navy-gradient [data-slot="badge"],
+.navy-gradient span.badge,
+.navy-gradient span[data-slot="badge"],
+.navy-gradient .inline-flex.items-center.justify-center.rounded-md.border[data-slot="badge"],
+.navy-gradient span.inline-flex.items-center.justify-center.rounded-md.border {
+  color: #FFFFFF !important;
+  font-weight: 500 !important;
+}
+
+/* Ultra-specific badge override for stubborn cases */
+.navy-gradient span[data-slot="badge"].inline-flex.items-center.justify-center.rounded-md.border.px-2.py-0\.5.text-xs.font-medium {
+  color: #FFFFFF !important;
+  font-weight: 500 !important;
+}
+
+/* Ultra-specific override for badges inside cards with text-foreground - MUST come after the above */
+.navy-gradient .bg-card span[data-slot="badge"].inline-flex.items-center.justify-center.rounded-md.border.px-2.py-0\.5.text-xs.font-medium.text-foreground,
+.navy-gradient .bg-white span[data-slot="badge"].inline-flex.items-center.justify-center.rounded-md.border.px-2.py-0\.5.text-xs.font-medium.text-foreground,
+.navy-gradient .card span[data-slot="badge"].inline-flex.items-center.justify-center.rounded-md.border.px-2.py-0\.5.text-xs.font-medium.text-foreground {
+  color: #1A202C !important;
+  font-weight: 500 !important;
+}
+
+/* OVERRIDE: Card text (white backgrounds) - Higher specificity */
+.bg-card .text-card-foreground,
+.bg-white .text-card-foreground,
+.card .text-card-foreground,
+.bg-card h1,
+.bg-card h2,
+.bg-card h3,
+.bg-white h1,
+.bg-white h2,
+.bg-white h3,
+.card h1,
+.card h2,
+.card h3,
+.navy-gradient .bg-card .text-card-foreground,
+.navy-gradient .bg-white .text-card-foreground,
+.navy-gradient [class*="bg-card"] .text-card-foreground,
+.navy-gradient .bg-card h1,
+.navy-gradient .bg-card h2, 
+.navy-gradient .bg-card h3,
+.navy-gradient .bg-card .font-semibold,
+.navy-gradient .bg-card .font-medium,
+.navy-gradient .bg-white h1,
+.navy-gradient .bg-white h2,
+.navy-gradient .bg-white h3,
+.navy-gradient .bg-white .font-semibold,
+.navy-gradient .bg-white .font-medium,
+.navy-gradient .card .text-card-foreground,
+.navy-gradient .card h1,
+.navy-gradient .card h2,
+.navy-gradient .card h3,
+.navy-gradient .card .font-semibold,
+.navy-gradient .card .font-medium,
+.navy-gradient .bg-card .badge,
+.navy-gradient .bg-card [data-slot="badge"],
+.navy-gradient .bg-card span.badge,
+.navy-gradient .bg-card span[data-slot="badge"],
+.navy-gradient .bg-white .badge,
+.navy-gradient .bg-white [data-slot="badge"],
+.navy-gradient .bg-white span.badge,
+.navy-gradient .bg-white span[data-slot="badge"],
+.navy-gradient .card .badge,
+.navy-gradient .card [data-slot="badge"],
+.navy-gradient .card span.badge,
+.navy-gradient .card span[data-slot="badge"],
+.navy-gradient .bg-card span[data-slot="badge"].text-foreground,
+.navy-gradient .bg-white span[data-slot="badge"].text-foreground,
+.navy-gradient .card span[data-slot="badge"].text-foreground {
+  color: #1A202C !important; /* Dark text on white cards */
+  font-weight: 600 !important;
+}
+
+.navy-gradient .bg-card .text-muted-foreground,
+.navy-gradient .bg-white .text-muted-foreground,
+.navy-gradient [class*="bg-card"] .text-muted-foreground,
+.navy-gradient .bg-card p,
+.navy-gradient .bg-card div,
+.navy-gradient .bg-card span,
+.navy-gradient .bg-white p,
+.navy-gradient .bg-white div,
+.navy-gradient .bg-white span,
+.navy-gradient .card .text-muted-foreground,
+.navy-gradient .card p,
+.navy-gradient .card div,
+.navy-gradient .card span,
+.bg-card .text-muted-foreground,
+.bg-white .text-muted-foreground,
+.card .text-muted-foreground,
+.bg-card p,
+.bg-card div,
+.bg-card span,
+.bg-white p,
+.bg-white div,
+.bg-white span,
+.card p,
+.card div,
+.card span {
+  color: #4A5568 !important; /* Gray text on white cards */
 }

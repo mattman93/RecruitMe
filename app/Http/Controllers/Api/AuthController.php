@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UploadedFile;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -104,24 +105,121 @@ class AuthController extends Controller
     }
     public function claimGuestUploads(Request $request)
     {
-        $sessionId = session()->getId();
         $user = Auth::user();
-        
-        // Move files from guest storage to user storage
-        $guestPath = "guest-uploads/{$sessionId}";
         $userPath = "user-uploads/{$user->id}";
+        $movedFiles = [];
         
-        if (Storage::exists($guestPath)) {
-            $files = Storage::files($guestPath);
-            foreach ($files as $file) {
-                $fileName = basename($file);
-                Storage::move($file, "{$userPath}/{$fileName}");
+        // Get guest uploads from current session first
+        $guestUploads = session('guest_uploads', []);
+        $sessionId = session()->getId();
+        
+        if (!empty($guestUploads)) {
+            // Process files from session metadata
+            foreach ($guestUploads as $uploadInfo) {
+                if (Storage::exists($uploadInfo['path'])) {
+                    $newPath = "{$userPath}/{$uploadInfo['stored_name']}";
+                    Storage::move($uploadInfo['path'], $newPath);
+                    
+                    // Create database record
+                    $uploadedFile = UploadedFile::create([
+                        'user_id' => $user->id,
+                        'original_name' => $uploadInfo['original_name'],
+                        'file_path' => $newPath,
+                        'file_type' => 'resume', // Default to resume for now
+                        'mime_type' => $uploadInfo['type'],
+                        'file_size' => $uploadInfo['size'],
+                        'is_active' => true,
+                    ]);
+                    
+                    $movedFiles[] = [
+                        'id' => $uploadedFile->id,
+                        'original_name' => $uploadedFile->original_name,
+                        'stored_name' => $uploadInfo['stored_name'],
+                        'path' => $newPath,
+                        'size' => $uploadedFile->file_size,
+                        'type' => $uploadedFile->mime_type,
+                        'created_at' => $uploadedFile->created_at->toISOString()
+                    ];
+                }
             }
             
-            // Clean up guest directory
-            Storage::deleteDirectory($guestPath);
+            // Clean up current session directory
+            $guestPath = "guest-uploads/{$sessionId}";
+            if (Storage::exists($guestPath)) {
+                Storage::deleteDirectory($guestPath);
+            }
+            session()->forget('guest_uploads');
+        }
+        
+        // Fallback: Check if user already has files in database
+        if (empty($movedFiles)) {
+            $existingUploads = $user->uploadedFiles()->where('is_active', true)->get();
+            foreach ($existingUploads as $uploadedFile) {
+                $movedFiles[] = [
+                    'id' => $uploadedFile->id,
+                    'original_name' => $uploadedFile->original_name,
+                    'stored_name' => basename($uploadedFile->file_path),
+                    'path' => $uploadedFile->file_path,
+                    'size' => $uploadedFile->file_size,
+                    'type' => $uploadedFile->mime_type,
+                    'created_at' => $uploadedFile->created_at->toISOString()
+                ];
+            }
+        }
+        
+        // Last resort: Check recent guest upload directories (in case session was lost)
+        if (empty($movedFiles)) {
+            $guestDirectories = Storage::directories('guest-uploads');
             
-            return response()->json(['message' => 'Files claimed successfully']);
+            // Sort by modification time and check the most recent ones
+            usort($guestDirectories, function($a, $b) {
+                return Storage::lastModified($b) - Storage::lastModified($a);
+            });
+            
+            // Check the 3 most recent guest directories
+            foreach (array_slice($guestDirectories, 0, 3) as $guestDir) {
+                $files = Storage::files($guestDir);
+                if (!empty($files)) {
+                    foreach ($files as $file) {
+                        $fileName = basename($file);
+                        $newPath = "{$userPath}/{$fileName}";
+                        Storage::move($file, $newPath);
+                        
+                        // Create database record for moved file
+                        $uploadedFile = UploadedFile::create([
+                            'user_id' => $user->id,
+                            'original_name' => $fileName,
+                            'file_path' => $newPath,
+                            'file_type' => 'resume', // Default to resume
+                            'mime_type' => Storage::mimeType($newPath) ?: 'application/octet-stream',
+                            'file_size' => Storage::size($newPath),
+                            'is_active' => true,
+                        ]);
+                        
+                        $movedFiles[] = [
+                            'id' => $uploadedFile->id,
+                            'original_name' => $uploadedFile->original_name,
+                            'stored_name' => $fileName,
+                            'path' => $newPath,
+                            'size' => $uploadedFile->file_size,
+                            'type' => $uploadedFile->mime_type,
+                            'created_at' => $uploadedFile->created_at->toISOString()
+                        ];
+                    }
+                    
+                    // Clean up the guest directory
+                    Storage::deleteDirectory($guestDir);
+                    break; // Only process one directory
+                }
+            }
+        }
+        
+        if (!empty($movedFiles)) {
+            return response()->json([
+                'message' => 'Files claimed successfully',
+                'files' => $movedFiles,
+                'count' => count($movedFiles)
+            ]);
         }
         
         return response()->json(['message' => 'No files to claim']);

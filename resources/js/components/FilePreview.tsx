@@ -2,11 +2,23 @@ import { FileText, Image as ImageIcon } from "lucide-react";
 import { Card } from "./ui/card";
 
 interface FilePreviewProps {
-  file: File;
+  file?: File;
   preview?: string;
+  // For uploaded files (dashboard)
+  fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
+  uploadedAt?: string;
 }
 
-export function FilePreview({ file, preview }: FilePreviewProps) {
+export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSize, uploadedAt }: FilePreviewProps) {
+  // Determine if we're showing a File object or uploaded file data
+  const isFileObject = !!file;
+  const displayName = isFileObject ? file!.name : fileName || 'Unknown file';
+  const displayType = isFileObject ? file!.type : fileType || '';
+  const displaySize = isFileObject ? file!.size : fileSize || 0;
+  const displayModified = isFileObject ? new Date(file!.lastModified).toLocaleDateString() : uploadedAt || 'Unknown';
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -36,7 +48,7 @@ export function FilePreview({ file, preview }: FilePreviewProps) {
           <h3 className="font-semibold text-card-foreground mb-2">File Preview</h3>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
-              {file.type.startsWith('image/') ? (
+              {displayType.startsWith('image/') ? (
                 <ImageIcon className="h-6 w-6 text-primary" />
               ) : (
                 <FileText className="h-6 w-6 text-primary" />
@@ -44,12 +56,12 @@ export function FilePreview({ file, preview }: FilePreviewProps) {
             </div>
             <div>
               <p className="font-medium text-card-foreground truncate max-w-xs">
-                {file.name}
+                {displayName}
               </p>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{formatFileSize(file.size)}</span>
+                <span>{formatFileSize(displaySize)}</span>
                 <span>•</span>
-                <span>{getFileTypeDisplay(file.type)}</span>
+                <span>{getFileTypeDisplay(displayType)}</span>
               </div>
             </div>
           </div>
@@ -62,31 +74,53 @@ export function FilePreview({ file, preview }: FilePreviewProps) {
             <div className="w-full">
               <img
                 src={preview}
-                alt={file.name}
+                alt={displayName}
                 className="max-w-full max-h-[400px] object-contain rounded-lg shadow-sm mx-auto"
               />
             </div>
-          ) : file.type === 'application/pdf' ? (
-            // PDF placeholder
+          ) : fileUrl && displayType.startsWith('image/') ? (
+            // Uploaded image preview
+            <div className="w-full">
+              <img
+                src={fileUrl}
+                alt={displayName}
+                className="max-w-full max-h-[400px] object-contain rounded-lg shadow-sm mx-auto"
+              />
+            </div>
+          ) : displayType === 'application/pdf' && (fileUrl || preview) ? (
+            // PDF viewer
+            <div className="w-full">
+              <iframe
+                src={fileUrl || preview}
+                title={displayName}
+                className="w-full h-[500px] rounded-lg border border-border"
+                style={{ minHeight: '500px' }}
+              />
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                If PDF doesn't display, try opening it in a new tab
+              </p>
+            </div>
+          ) : displayType === 'application/pdf' ? (
+            // PDF fallback when no URL available
             <div className="text-center space-y-4">
               <div className="p-6 bg-red-50 rounded-lg">
                 <FileText className="h-16 w-16 text-red-600 mx-auto mb-4" />
                 <p className="text-red-800 font-medium">PDF Document</p>
                 <p className="text-red-600 text-sm">
-                  PDF preview not available in browser
+                  PDF preview not available - no file URL provided
                 </p>
               </div>
               <p className="text-sm text-muted-foreground">
                 Click download to view the full PDF document
               </p>
             </div>
-          ) : file.type.includes('document') || file.type.includes('word') ? (
+          ) : displayType.includes('document') || displayType.includes('word') ? (
             // Document placeholder
             <div className="text-center space-y-4">
               <div className="p-6 bg-blue-50 rounded-lg">
                 <FileText className="h-16 w-16 text-blue-600 mx-auto mb-4" />
                 <p className="text-blue-800 font-medium">
-                  {getFileTypeDisplay(file.type)} Document
+                  {getFileTypeDisplay(displayType)} Document
                 </p>
                 <p className="text-blue-600 text-sm">
                   Document preview not available
@@ -116,25 +150,25 @@ export function FilePreview({ file, preview }: FilePreviewProps) {
             <div>
               <p className="text-muted-foreground">File Type</p>
               <p className="font-medium text-card-foreground">
-                {getFileTypeDisplay(file.type)}
+                {getFileTypeDisplay(displayType)}
               </p>
             </div>
             <div>
               <p className="text-muted-foreground">File Size</p>
               <p className="font-medium text-card-foreground">
-                {formatFileSize(file.size)}
+                {formatFileSize(displaySize)}
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground">Last Modified</p>
+              <p className="text-muted-foreground">{isFileObject ? 'Last Modified' : 'Uploaded'}</p>
               <p className="font-medium text-card-foreground">
-                {new Date(file.lastModified).toLocaleDateString()}
+                {displayModified}
               </p>
             </div>
             <div>
               <p className="text-muted-foreground">MIME Type</p>
               <p className="font-medium text-card-foreground text-xs">
-                {file.type}
+                {displayType}
               </p>
             </div>
           </div>

@@ -143,12 +143,19 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
     });
 
     try {
+      // Get CSRF token
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
       const response = await fetch('/api/guest/resume-upload', {
         method: 'POST',
         body: formData,
+        credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': token,
         },
       });
 
@@ -172,12 +179,19 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
     });
 
     try {
+      // Get CSRF token
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
       const response = await fetch('/resume/upload', {
         method: 'POST',
         body: formData,
+        credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': token,
         },
       });
 
@@ -215,7 +229,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
       } else {
         // User is not logged in, upload to temporary storage first
         await uploadGuestFiles(completedFiles);
-        // Trigger authentication flow
+        // Trigger authentication flow immediately
         onAuthRequired();
       }
       
@@ -224,6 +238,37 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
       console.error('Upload process failed:', error);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // New function to handle upload button click for unauthenticated users
+  const handleUploadClick = async () => {
+    const completedFiles = uploadedFiles.filter(f => f.status === 'completed');
+    
+    if (completedFiles.length === 0) {
+      setErrors(['No files ready for upload']);
+      return;
+    }
+
+    // Check if user is authenticated
+    const authenticated = await checkAuthentication();
+    
+    if (!authenticated) {
+      // Store files temporarily and redirect to login immediately
+      setIsProcessing(true);
+      try {
+        await uploadGuestFiles(completedFiles);
+        // Trigger authentication flow
+        onAuthRequired();
+      } catch (error) {
+        setErrors(['Failed to prepare files for upload. Please try again.']);
+        console.error('Guest upload failed:', error);
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      // If authenticated, proceed with normal upload
+      handleFinalUpload();
     }
   };
 
@@ -350,7 +395,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
             </div>
           </div>
 
-          {/* Login Option - Separate section below upload area */}
+          {/* Login Option - Only show for authenticated users as a logout option */}
           {!isAuthenticated && (
             <div className="flex justify-center">
               <div className="w-full max-w-2xl">
@@ -500,9 +545,9 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
 
               {/* Upload Button - Show when files are completed */}
               {hasCompletedFiles && (
-                <div className="pt-4 space-y-4">
+                <div className="pt-4">
                   <Button 
-                    onClick={handleFinalUpload}
+                    onClick={handleUploadClick}
                     disabled={isProcessing}
                     className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
                     size="lg"
@@ -515,31 +560,10 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                     ) : (
                       <div className="flex items-center space-x-2">
                         <Upload className="h-6 w-6" />
-                        <span>Upload Resume</span>
+                        <span>{isAuthenticated ? 'Upload Resume' : 'Upload Resume & Login'}</span>
                       </div>
                     )}
                   </Button>
-                  
-                  {/* Login Option for Existing Users */}
-                  {!isAuthenticated && (
-                    <div className="text-center">
-                      <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-border"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                          <span className="bg-background px-4 text-muted-foreground">or</span>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="outline"
-                        onClick={onShowLogin}
-                        className="w-full mt-4 h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
-                      >
-                        Already have an account? Login
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
