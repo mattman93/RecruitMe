@@ -10,6 +10,16 @@ Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
+// API authentication routes that need full session support
+Route::prefix('api')->group(function () {
+    Route::get('/csrf-token', function () {
+        return response()->json(['token' => csrf_token()]);
+    });
+    Route::post('/login', [\App\Http\Controllers\Api\AuthController::class, 'login']);
+    Route::post('/register', [\App\Http\Controllers\Api\AuthController::class, 'register']);
+    Route::post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']);
+});
+
 Route::get('/', function () {
     return Inertia::render('Welcome');
 })->name('home');

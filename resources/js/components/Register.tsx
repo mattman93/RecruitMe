@@ -58,12 +58,49 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
     }
 
     setIsLoading(true);
+    setErrors({});
     
-    // Simulate registration process
-    setTimeout(() => {
+    try {
+      // Get CSRF token from Laravel
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': token,
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          password_confirmation: formData.confirmPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        onRegister();
+      } else {
+        if (data.errors) {
+          setErrors(data.errors);
+        } else {
+          setErrors({ general: data.message || 'Registration failed. Please try again.' });
+        }
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setErrors({ general: 'An error occurred. Please try again.' });
+    } finally {
       setIsLoading(false);
-      onRegister();
-    }, 1500);
+    }
   };
 
   const handleInputChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,6 +140,13 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
                 Join thousands of job seekers finding their dream careers
               </p>
             </div>
+
+            {/* General Error Message */}
+            {errors.general && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{errors.general}</p>
+              </div>
+            )}
 
             {/* Social Registration Buttons */}
             <div className="space-y-3">

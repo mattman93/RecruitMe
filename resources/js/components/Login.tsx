@@ -30,7 +30,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     });
     const { token } = await tokenResponse.json();
 console.log(token);
-    const response = await fetch('/login', {
+    const response = await fetch('/api/login', {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -40,7 +40,6 @@ console.log(token);
         'X-CSRF-TOKEN': token,
       },
       body: JSON.stringify({ email, password }),
-  
     });
 
     const data = await response.json();

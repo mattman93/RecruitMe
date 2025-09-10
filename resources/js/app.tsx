@@ -50,12 +50,18 @@ export default function App() {
   const handleRegister = async () => {
     // After successful registration, check for any pending guest uploads
     try {
+      // Get CSRF token from API
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
       const response = await fetch('/api/user/claim-guest-uploads', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': token,
         },
       });
       
@@ -72,12 +78,18 @@ export default function App() {
   const handleLogin = async () => {
     // After successful login, check for any pending guest uploads
     try {
+      // Get CSRF token from API
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
       const response = await fetch('/api/user/claim-guest-uploads', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': token,
         },
       });
       
@@ -93,12 +105,18 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/logout', {
+      // Get CSRF token from API
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
+      const response = await fetch('/api/logout', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': token,
         },
       });
 
@@ -125,12 +143,18 @@ export default function App() {
   const handleForceLogout = async () => {
     // Force logout first, then show login
     try {
-      await fetch('/logout', {
+      // Get CSRF token from API
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
+      await fetch('/api/logout', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': token,
         },
       });
     } catch (error) {
