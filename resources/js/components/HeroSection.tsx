@@ -2,28 +2,33 @@ import { Upload, Search, Send, CheckCircle } from "lucide-react";
 
 export function HeroSection() {
   return (
-    <div className="px-6 py-24">
-      <div className="max-w-6xl mx-auto">
-        {/* Main Hero Content */}
-        <div className="text-center mb-20">
-          <div className="mb-6 welcome-text">
-            <img 
-              src="/images/welcome-appliflow.svg" 
-              alt="Welcome to AppliFlow" 
-              className="mx-auto max-w-full h-auto"
-              style={{ maxHeight: '200px' }}
-            />
+    <div>
+      {/* Hero Section with Background Image */}
+      <div className="px-6 py-24 hero-background">
+        <div className="max-w-6xl mx-auto relative z-10">
+          {/* Main Hero Content */}
+          <div className="text-center mb-8">
+            <div className="mb-6 welcome-text">
+              <img 
+                src="/images/welcome-appliflow.svg" 
+                alt="Welcome to AppliFlow" 
+                className="mx-auto max-w-full h-auto"
+                style={{ maxHeight: '200px' }}
+              />
+            </div>
+            <p className="text-xl text-white/90 max-w-3xl mx-auto mb-8 leading-relaxed tag-line">
+              Get started by uploading your resume and letting our system
+              analyze the best job matches for you. Then hit "Apply" and let AppliFlow do the rest.
+              <p className="text-lg text-white/80 font-medium">It's that simple</p>
+            </p>
           </div>
-          <p className="text-xl text-white/90 max-w-3xl mx-auto mb-8 leading-relaxed tag-line">
-            Get started by uploading your resume and letting our system
-            analyze the best job matches for you. Then hit "Apply" and let AppliFlow do the rest.
-            <p className="text-lg text-white/80 font-medium">It's that simple</p>
-          </p>
         </div>
+      </div>
 
-        {/* How It Works Section */}
+      {/* How It Works Section - Navy Gradient Background */}
+      <div className="px-6 py-16">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-3xl text-white text-center font-semibold how-it-works-spacing">
+          <h2 className="text-2xl md:text-3xl text-white text-center font-semibold how-it-works-spacing mb-12">
             How It Works
           </h2>
           <div className="flex flex-col sm:flex-row gap-8 justify-center items-center">
