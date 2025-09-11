@@ -135,8 +135,8 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
           <div className="space-y-6">
             {/* Header */}
             <div className="text-center space-y-2">
-              <h1 className="text-2xl text-card-foreground">Create Account</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-2xl font-bold register-heading-text">Create Account</h1>
+              <p className="register-text">
                 Join thousands of job seekers finding their dream careers
               </p>
             </div>
@@ -153,7 +153,7 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
+                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all register-text"
                 onClick={handleGoogleRegister}
               >
                 <svg className="mr-3 h-5 w-5" viewBox="0 0 24 24">
@@ -180,7 +180,7 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
+                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all register-text"
                 onClick={handleGithubRegister}
               >
                 <svg className="mr-3 h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
@@ -194,16 +194,16 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
             <div className="relative">
               <Separator />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="bg-card px-4 text-sm text-muted-foreground">or</span>
+                <span className="bg-card px-4 text-sm register-text">or</span>
               </div>
             </div>
 
             {/* Registration Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-card-foreground">Full Name</Label>
+                <Label htmlFor="name" className="register-text">Full Name</Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="name"
                     type="text"
@@ -222,9 +222,9 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-card-foreground">Email</Label>
+                <Label htmlFor="email" className="register-text">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="email"
                     type="email"
@@ -243,9 +243,9 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-card-foreground">Password</Label>
+                <Label htmlFor="password" className="register-text">Password</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
@@ -260,7 +260,7 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -271,9 +271,9 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-card-foreground">Confirm Password</Label>
+                <Label htmlFor="confirmPassword" className="register-text">Confirm Password</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
@@ -288,7 +288,7 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -304,18 +304,18 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
                   className="rounded border-border text-primary focus:ring-primary/20"
                   required
                 />
-                <span className="text-muted-foreground">
+                <span className="register-text">
                   I agree to the{" "}
                   <button
                     type="button"
-                    className="text-primary hover:text-primary/80 transition-colors"
+                    className="text-white hover:text-white/80 transition-colors underline"
                   >
                     Terms of Service
                   </button>
                   {" "}and{" "}
                   <button
                     type="button"
-                    className="text-primary hover:text-primary/80 transition-colors"
+                    className="text-white hover:text-white/80 transition-colors underline"
                   >
                     Privacy Policy
                   </button>
@@ -342,11 +342,11 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
             </form>
 
             {/* Footer */}
-            <div className="text-center text-sm text-muted-foreground">
+            <div className="text-center text-sm register-text">
               Already have an account?{" "}
               <button 
                 onClick={onSwitchToLogin}
-                className="text-primary hover:text-primary/80 transition-colors font-medium"
+                className="signin-link-btn hover:opacity-80 transition-colors font-medium"
               >
                 Sign in
               </button>

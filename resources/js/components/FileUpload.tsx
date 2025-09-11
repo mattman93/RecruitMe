@@ -361,10 +361,10 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
               className={`
                 w-full max-w-2xl h-80 border-2 border-dashed rounded-xl
                 flex flex-col items-center justify-center gap-6
-                transition-all duration-300 cursor-pointer bg-card
+                transition-all duration-300 cursor-pointer bg-card file-upload-glow
                 ${isDragOver 
-                  ? 'border-primary bg-primary/5 scale-[1.02] shadow-lg' 
-                  : 'border-border hover:border-primary/50 hover:bg-primary/5 hover:shadow-md'
+                  ? 'border-primary bg-primary/5 scale-[1.02]' 
+                  : 'border-border hover:border-primary/50 hover:bg-primary/5'
                 }
               `}
               onDragOver={handleDragOver}
@@ -376,10 +376,10 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                 <Upload className="h-12 w-12 text-primary" />
               </div>
               <div className="text-center space-y-3">
-                <p className="text-foreground">
+                <p className="file-upload-main-text">
                   Drag your files to upload or{" "}
                   <button 
-                    className="text-primary underline hover:no-underline font-medium transition-colors"
+                    className="file-select-button text-primary underline hover:no-underline font-medium transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleFileSelect();
@@ -388,7 +388,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                     select files
                   </button>
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm file-upload-support-text">
                   Supports PDF, DOC, DOCX, JPEG, PNG, GIF, WebP (max 10MB)
                 </p>
               </div>
@@ -405,7 +405,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                       <div className="w-full border-t border-border"></div>
                     </div>
                     <div className="relative flex justify-center text-sm">
-                      <span className="bg-background px-4 text-muted-foreground">or</span>
+                      <span className="bg-background px-4 text-gray-600 file-upload-main-text">or</span>
                     </div>
                   </div>
                   <button 
@@ -441,9 +441,10 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                   w-full h-32 border-2 border-dashed rounded-xl
                   flex items-center justify-center gap-4
                   transition-all duration-300 cursor-pointer bg-card
+                  shadow-[0_0_40px_rgba(62,214,167,0.5),0_0_80px_rgba(62,214,167,0.2),inset_0_0_20px_rgba(62,214,167,0.1)] hover:shadow-[0_0_55px_rgba(62,214,167,0.7),0_0_110px_rgba(62,214,167,0.3),inset_0_0_30px_rgba(62,214,167,0.2)]
                   ${isDragOver 
-                    ? 'border-primary bg-primary/5 scale-[1.02] shadow-lg' 
-                    : 'border-border hover:border-primary/50 hover:bg-primary/5 hover:shadow-md'
+                    ? 'border-primary bg-primary/5 scale-[1.02] shadow-[0_0_70px_rgba(62,214,167,0.9),0_0_140px_rgba(62,214,167,0.4),inset_0_0_40px_rgba(62,214,167,0.3)]' 
+                    : 'border-border hover:border-primary/50 hover:bg-primary/5'
                   }
                 `}
                 onDragOver={handleDragOver}
@@ -455,10 +456,10 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                   <Upload className="h-6 w-6 text-primary" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-foreground">
+                  <p className="text-sm text-gray-900 dark:text-white">
                     Add more files or{" "}
                     <button 
-                      className="text-primary underline hover:no-underline font-medium transition-colors"
+                      className="file-select-button text-primary underline hover:no-underline font-medium transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleFileSelect();
@@ -507,7 +508,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                             <CheckCircle2 className="h-4 w-4 text-primary" />
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
                           {formatFileSize(uploadedFile.file.size)}
                         </p>
                         
@@ -515,7 +516,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                         {uploadedFile.status === 'uploading' && (
                           <div className="space-y-1">
                             <Progress value={uploadedFile.progress} className="h-2" />
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-gray-600 dark:text-gray-300">
                               {Math.round(uploadedFile.progress)}% uploaded
                             </p>
                           </div>

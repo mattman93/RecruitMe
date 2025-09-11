@@ -16,7 +16,18 @@ interface NavbarProps {
 export function Navbar({ isAuthenticated = false, onLogout }: NavbarProps) {
   return (
     <nav className="w-full bg-card border-b border-border px-6 py-4 shadow-sm">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+        {/* Logo */}
+        <div className="flex items-center">
+          <img 
+            src="/images/appliflow-logo.svg" 
+            alt="AppliFlow" 
+            className="h-8 w-auto"
+          />
+        </div>
+        
+        {/* User Menu */}
+        <div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="rounded-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all hover:scale-105">
@@ -55,6 +66,7 @@ export function Navbar({ isAuthenticated = false, onLogout }: NavbarProps) {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </nav>
   );

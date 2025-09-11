@@ -45,7 +45,7 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
       <div className="space-y-4">
         {/* File Header */}
         <div className="border-b border-border pb-4">
-          <h3 className="font-semibold text-card-foreground mb-2">File Preview</h3>
+          <h3 className="font-semibold file-preview-text mb-2">File Preview</h3>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
               {displayType.startsWith('image/') ? (
@@ -55,10 +55,10 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
               )}
             </div>
             <div>
-              <p className="font-medium text-card-foreground truncate max-w-xs">
+              <p className="font-medium file-preview-text truncate max-w-xs">
                 {displayName}
               </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm file-preview-text">
                 <span>{formatFileSize(displaySize)}</span>
                 <span>•</span>
                 <span>{getFileTypeDisplay(displayType)}</span>
@@ -96,7 +96,7 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
                 className="w-full h-[500px] rounded-lg border border-border"
                 style={{ minHeight: '500px' }}
               />
-              <p className="text-xs text-muted-foreground mt-2 text-center">
+              <p className="text-xs file-preview-text mt-2 text-center">
                 If PDF doesn't display, try opening it in a new tab
               </p>
             </div>
@@ -110,7 +110,7 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
                   PDF preview not available - no file URL provided
                 </p>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm file-preview-text">
                 Click download to view the full PDF document
               </p>
             </div>
@@ -126,7 +126,7 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
                   Document preview not available
                 </p>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm file-preview-text">
                 Download the file to view its contents
               </p>
             </div>
@@ -134,9 +134,9 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
             // Generic file placeholder
             <div className="text-center space-y-4">
               <div className="p-6 bg-gray-50 rounded-lg">
-                <FileText className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-800 font-medium">File Preview</p>
-                <p className="text-gray-600 text-sm">
+                <FileText className="h-16 w-16 file-preview-text mx-auto mb-4" />
+                <p className="file-preview-text font-medium">File Preview</p>
+                <p className="file-preview-text text-sm">
                   Preview not available for this file type
                 </p>
               </div>
@@ -148,26 +148,26 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
         <div className="border-t border-border pt-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-muted-foreground">File Type</p>
-              <p className="font-medium text-card-foreground">
+              <p className="file-preview-text">File Type</p>
+              <p className="font-medium file-preview-text">
                 {getFileTypeDisplay(displayType)}
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground">File Size</p>
-              <p className="font-medium text-card-foreground">
+              <p className="file-preview-text">File Size</p>
+              <p className="font-medium file-preview-text">
                 {formatFileSize(displaySize)}
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground">{isFileObject ? 'Last Modified' : 'Uploaded'}</p>
-              <p className="font-medium text-card-foreground">
+              <p className="file-preview-text">{isFileObject ? 'Last Modified' : 'Uploaded'}</p>
+              <p className="font-medium file-preview-text">
                 {displayModified}
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground">MIME Type</p>
-              <p className="font-medium text-card-foreground text-xs">
+              <p className="file-preview-text">MIME Type</p>
+              <p className="font-medium file-preview-text text-xs">
                 {displayType}
               </p>
             </div>

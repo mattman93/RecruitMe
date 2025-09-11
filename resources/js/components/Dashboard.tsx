@@ -122,8 +122,8 @@ const fetchUploadedResume = async () => {
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-card-foreground">Welcome to Your Job Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold text-white">Welcome to Your Job Dashboard</h1>
+          <p className="text-white/90">
             Your resume is ready. Let's find you the perfect job opportunities.
           </p>
         </div>
@@ -133,9 +133,9 @@ const fetchUploadedResume = async () => {
           {/* Left Column - Resume Preview */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold text-card-foreground">Your Resume</h2>
-              <Badge variant="outline" className="flex items-center gap-2">
-                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              <h2 className="text-2xl font-semibold text-white">Your Resume</h2>
+              <Badge variant="outline" className="flex items-center gap-2 bg-primary border-primary text-primary-foreground">
+                <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
                 Ready
               </Badge>
             </div>
@@ -149,10 +149,10 @@ const fetchUploadedResume = async () => {
                       <FileText className="h-8 w-8 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-card-foreground truncate">
+                      <p className="font-medium truncate dashboard-card-text">
                         {uploadedResume.original_name}
                       </p>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-3 text-sm dashboard-card-text">
                         <span>{formatFileSize(uploadedResume.size)}</span>
                         <span>•</span>
                         <span>{getFileTypeDisplay(uploadedResume.type)}</span>
@@ -168,14 +168,14 @@ const fetchUploadedResume = async () => {
                     <Button
                       variant="outline"
                       onClick={handleDownloadResume}
-                      className="flex-1"
+                      className="flex-1 dashboard-card-text"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download
                     </Button>
                     <Button
                       variant="outline"
-                      className="flex-1"
+                      className="flex-1 dashboard-card-text"
                     >
                       <Edit3 className="h-4 w-4 mr-2" />
                       Replace
@@ -196,8 +196,8 @@ const fetchUploadedResume = async () => {
               </Card>
             ) : (
               <Card className="p-6 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No resume found</p>
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="dashboard-card-text">No resume found</p>
                 <Button variant="outline" className="mt-4">
                   Upload Resume
                 </Button>

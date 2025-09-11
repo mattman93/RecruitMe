@@ -64,7 +64,7 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-card-foreground">Job Opportunities</h2>
+          <h2 className="text-2xl font-semibold text-white">Job Opportunities</h2>
           <Badge variant="secondary" className="px-3 py-1">
             Loading...
           </Badge>
@@ -88,10 +88,10 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-card-foreground">Job Opportunities</h2>
+          <h2 className="text-2xl font-semibold text-white">Job Opportunities</h2>
         </div>
         <Card className="p-6 text-center">
-          <p className="text-muted-foreground">{error}</p>
+          <p className="job-card-text">{error}</p>
           <Button 
             onClick={fetchLeads} 
             variant="outline" 
@@ -108,7 +108,7 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-card-foreground">Job Opportunities</h2>
+        <h2 className="text-2xl font-semibold text-white">Job Opportunities</h2>
         <Badge variant="secondary" className="px-3 py-1">
           {leads.length} jobs found
         </Badge>
@@ -122,37 +122,37 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
               {/* Header */}
               <div className="space-y-2">
                 <div className="flex items-start justify-between">
-                  <h3 className="font-semibold text-lg text-card-foreground leading-tight">
+                  <h3 className="font-semibold text-lg job-card-text leading-tight">
                     {lead.job_title}
                   </h3>
                   <Badge variant="outline" className="ml-2 flex-shrink-0">
                     {lead.experience_level}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 job-card-text">
                   <Building2 className="h-4 w-4" />
-                  <span className="font-medium">{lead.company}</span>
+                  <span className="font-medium job-card-text">{lead.company}</span>
                 </div>
               </div>
 
               {/* Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 job-card-text">
                   <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="font-medium">{lead.pay_range}</span>
+                  <span className="font-medium job-card-text">{lead.pay_range}</span>
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 job-card-text">
                   <MapPin className="h-4 w-4 text-blue-600" />
-                  <span>{lead.location}</span>
+                  <span className="job-card-text">{lead.location}</span>
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 job-card-text">
                   <Clock className="h-4 w-4 text-purple-600" />
-                  <span>{lead.employment_type}</span>
+                  <span className="job-card-text">{lead.employment_type}</span>
                 </div>
               </div>
 
               {/* Description */}
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm job-card-text leading-relaxed">
                 {truncateDescription(lead.description)}
               </p>
             </div>

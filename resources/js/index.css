@@ -4433,6 +4433,7 @@
   --lighter-gray: #e2e8f0;
   --medium-gray: #718096;
   --background: var(--light-gray);
+  --footer-background: #07223d !important;
   --foreground: var(--dark-gray);
   --card: #fff;
   --card-foreground: var(--dark-gray);

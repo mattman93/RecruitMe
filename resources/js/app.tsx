@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { Navbar } from "./components/Navbar";
 import { HeroSection } from "./components/HeroSection";
+import { FeaturesSection } from "./components/FeaturesSection";
+import { TestimonialsSection } from "./components/TestimonialsSection";
 import { FileUpload } from "./components/FileUpload";
 import { Login } from "./components/Login";
 import { Register } from "./components/Register";
 import { Dashboard } from "./components/Dashboard";
+import { Footer } from "./components/Footer";
 
 type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated';
 
@@ -185,7 +188,7 @@ export default function App() {
             <div className="text-center">
               <button 
                 onClick={() => setAppState('guest')}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
+                className="text-sm text-white back-to-upload-btn hover:text-primary transition-colors mb-4"
               >
                 ← Back to upload
               </button>
@@ -214,10 +217,10 @@ export default function App() {
         <Navbar isAuthenticated={false} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center space-y-4 mb-8">
-            <h2 className="text-2xl font-semibold text-card-foreground">
+            <h2 className="text-2xl font-semibold text-white">
               Almost There!
             </h2>
-            <p className="text-muted-foreground max-w-md">
+            <p className="text-white/90 max-w-md">
               Your resume has been uploaded successfully. Please sign in to start finding jobs and applying to positions.
             </p>
           </div>
@@ -232,8 +235,18 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col navy-gradient">
         <Navbar isAuthenticated={false} />
-        <HeroSection />
-        <FileUpload onAuthRequired={handleAuthRequired} onShowLogin={handleForceLogout} isAuthenticated={false} />
+        <div className="hero-spacing">
+          <HeroSection />
+        </div>
+        <div className="upload-spacing">
+          <FileUpload onAuthRequired={handleAuthRequired} onShowLogin={handleForceLogout} isAuthenticated={false} />
+        </div>
+        <div className="testimonial-spacing">
+          <TestimonialsSection />
+        </div>
+        <div className="footer-spacing footer-background">
+          <Footer />
+        </div>
       </div>
     );
   }

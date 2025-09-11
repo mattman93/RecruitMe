@@ -75,8 +75,8 @@ console.log(token);
           <div className="space-y-6">
             {/* Header */}
             <div className="text-center space-y-2">
-              <h1 className="text-2xl text-card-foreground">Welcome Back</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-2xl font-bold login-heading-text">Welcome Back</h1>
+              <p className="login-text">
                 Sign in to your account to continue
               </p>
             </div>
@@ -93,7 +93,7 @@ console.log(token);
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
+                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all login-text"
                 onClick={handleGoogleLogin}
               >
                 <svg className="mr-3 h-5 w-5" viewBox="0 0 24 24">
@@ -120,7 +120,7 @@ console.log(token);
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all"
+                className="w-full h-12 border-border hover:bg-primary/5 hover:border-primary/50 transition-all login-text"
                 onClick={handleGithubLogin}
               >
                 <svg className="mr-3 h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
@@ -134,16 +134,16 @@ console.log(token);
             <div className="relative">
               <Separator />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="bg-card px-4 text-sm text-muted-foreground">or</span>
+                <span className="bg-card px-4 text-sm login-text font-medium">or</span>
               </div>
             </div>
 
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-card-foreground">Email</Label>
+                <Label htmlFor="email" className="login-text font-medium">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="email"
                     type="email"
@@ -157,9 +157,9 @@ console.log(token);
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-card-foreground">Password</Label>
+                <Label htmlFor="password" className="login-text font-medium">Password</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
@@ -172,7 +172,7 @@ console.log(token);
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -185,7 +185,7 @@ console.log(token);
                     type="checkbox" 
                     className="rounded border-border text-primary focus:ring-primary/20"
                   />
-                  <span className="text-muted-foreground">Remember me</span>
+                  <span className="login-text font-medium">Remember me</span>
                 </label>
                 <button
                   type="button"
@@ -216,11 +216,11 @@ console.log(token);
 
             {/* Footer */}
             {onSwitchToRegister && (
-              <div className="text-center text-sm text-muted-foreground">
+              <div className="text-center text-sm login-text">
                 Don't have an account?{" "}
                 <button 
                   onClick={onSwitchToRegister}
-                  className="text-primary hover:text-primary/80 transition-colors font-medium"
+                  className="signup-link-btn hover:opacity-80 transition-colors font-medium"
                 >
                   Sign up
                 </button>
