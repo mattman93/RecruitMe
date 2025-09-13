@@ -398,6 +398,7 @@ body {
 
 .footer-background {
   background-color: var(--footer-background);
+  padding-top: 1em;
 }
 
 .social-link {
@@ -405,14 +406,44 @@ body {
     margin: 0 3px;
 }
 
+.dark .social-link {
+    color: #FFFFFF;
+    margin: 0 3px;
+}
+
+/* Avatar SVG styling */
+.lucide-user {
+    color: #1A365D;
+}
+
+.dark .lucide-user {
+    color: #FFFFFF;
+}
+
+/* Testimonial card borders */
+.testimonial-card {
+    border-color: #FFFFFF;
+}
+
+
 /* File Upload Text Styling */
 .file-upload-main-text {
     color: #12335f !important;
     font-weight: 500;
 }
 
+.dark .file-upload-main-text {
+    color: #FFFFFF !important;
+    font-weight: 500;
+}
+
 .file-upload-support-text {
     color: #12335f !important;
+    font-weight: 400;
+}
+
+.dark .file-upload-support-text {
+    color: #FFFFFF !important;
     font-weight: 400;
 }
 
@@ -782,16 +813,17 @@ body {
 .hero-background {
     position: relative;
     background: 
-        linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.9) 100%),
-        linear-gradient(45deg, #f8fafc 0%, #e2e8f0 25%, #cbd5e1 50%, #94a3b8 75%, #64748b 100%),
-        repeating-linear-gradient(
-            90deg,
-            transparent 0px,
-            rgba(255, 255, 255, 0.03) 1px,
-            rgba(255, 255, 255, 0.03) 2px,
-            transparent 3px,
-            transparent 10px
-        );
+        linear-gradient(180deg, 
+            rgba(26, 0, 51, 0.7) 0%,           /* Deep purple with opacity */
+            rgba(74, 26, 74, 0.7) 15%,         /* Purple-magenta with opacity */
+            rgba(122, 45, 122, 0.7) 30%,       /* Magenta with opacity */
+            rgba(184, 51, 107, 0.7) 45%,       /* Pink-magenta with opacity */
+            rgba(230, 64, 92, 0.7) 60%,        /* Pink-red with opacity */
+            rgba(255, 107, 74, 0.7) 75%,       /* Orange-red with opacity */
+            rgba(255, 167, 38, 0.7) 90%,       /* Orange with opacity */
+            rgba(255, 204, 66, 0.7) 100%       /* Golden yellow with opacity */
+        ),
+        linear-gradient(180deg, #1e293b 0%, #334155 100%); /* Navy base layer */
     background-size: cover;
     min-height: 400px;
     margin-bottom: 2em;
@@ -805,8 +837,23 @@ body {
     right: 0;
     bottom: 0;
     background: 
-        radial-gradient(circle at 20% 30%, rgba(62, 214, 167, 0.15) 0%, transparent 50%),
-        radial-gradient(circle at 80% 70%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
-        linear-gradient(135deg, rgba(30, 41, 59, 0.1) 0%, rgba(15, 23, 42, 0.05) 100%);
+        radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 40%),
+        radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 30%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, transparent 50%, rgba(0, 0, 0, 0.05) 100%);
     z-index: 1;
+}
+
+.hero-background::after {
+    content: '';
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: 
+        radial-gradient(ellipse at center, rgba(255, 167, 38, 0.4) 0%, transparent 70%),
+        radial-gradient(ellipse at center, rgba(255, 204, 66, 0.3) 0%, transparent 80%),
+        radial-gradient(ellipse at center, rgba(230, 64, 92, 0.2) 0%, transparent 90%);
+    z-index: 2;
+    filter: blur(8px);
 }

@@ -20,9 +20,9 @@ export function Navbar({ isAuthenticated = false, onLogout }: NavbarProps) {
         {/* Logo */}
         <div className="flex items-center">
           <img 
-            src="/images/appliflow-logo.svg" 
+            src="/images/appliflow-logo-v2.svg" 
             alt="AppliFlow" 
-            className="h-8 w-auto"
+            className=""
           />
         </div>
         

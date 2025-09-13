@@ -5,6 +5,7 @@ import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { FilePreview } from "./FilePreview";
 import { JobQueue } from "./JobQueue";
+import { Footer } from "./Footer";
 
 interface UploadedResume {
   id: number;
@@ -118,99 +119,102 @@ const fetchUploadedResume = async () => {
   }
 
   return (
-    <div className="flex-1 p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-white">Welcome to Your Job Dashboard</h1>
-          <p className="text-white/90">
-            Your resume is ready. Let's find you the perfect job opportunities.
-          </p>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Resume Preview */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold text-white">Your Resume</h2>
-              <Badge variant="outline" className="flex items-center gap-2 bg-primary border-primary text-primary-foreground">
-                <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                Ready
-              </Badge>
-            </div>
-
-            {uploadedResume ? (
-              <Card className="p-6">
-                <div className="space-y-4">
-                  {/* File Info */}
-                  <div className="flex items-center gap-4">
-                    <div className="flex-shrink-0 p-3 bg-primary/10 rounded-lg">
-                      <FileText className="h-8 w-8 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate dashboard-card-text">
-                        {uploadedResume.original_name}
-                      </p>
-                      <div className="flex items-center gap-3 text-sm dashboard-card-text">
-                        <span>{formatFileSize(uploadedResume.size)}</span>
-                        <span>•</span>
-                        <span>{getFileTypeDisplay(uploadedResume.type)}</span>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">
-                      {getFileTypeDisplay(uploadedResume.type)}
-                    </Badge>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t border-border">
-                    <Button
-                      variant="outline"
-                      onClick={handleDownloadResume}
-                      className="flex-1 dashboard-card-text"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1 dashboard-card-text"
-                    >
-                      <Edit3 className="h-4 w-4 mr-2" />
-                      Replace
-                    </Button>
-                  </div>
-
-                  {/* File Preview Area */}
-                  <div className="mt-6">
-                    <FilePreview 
-                      fileUrl={`/api/user/file/${uploadedResume.id}`}
-                      fileName={uploadedResume.original_name}
-                      fileType={uploadedResume.type}
-                      fileSize={uploadedResume.size}
-                      uploadedAt={new Date(uploadedResume.created_at).toLocaleDateString()}
-                    />
-                  </div>
-                </div>
-              </Card>
-            ) : (
-              <Card className="p-6 text-center">
-                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="dashboard-card-text">No resume found</p>
-                <Button variant="outline" className="mt-4">
-                  Upload Resume
-                </Button>
-              </Card>
-            )}
+    <div className="flex flex-col min-h-screen">
+      <div className="flex-1 p-8">
+        <div className="max-w-6xl mx-auto space-y-8">
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-bold text-white">Welcome to Your Job Dashboard</h1>
+            <p className="text-white/90">
+              Your resume is ready. Let's find you the perfect job opportunities.
+            </p>
           </div>
 
-          {/* Right Column - Job Queue */}
-          <div>
-            <JobQueue onStartApplying={handleStartApplying} />
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left Column - Resume Preview */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-semibold text-white">Your Resume</h2>
+                <Badge variant="outline" className="flex items-center gap-2 bg-primary border-primary text-primary-foreground">
+                  <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
+                  Ready
+                </Badge>
+              </div>
+
+              {uploadedResume ? (
+                <Card className="p-6">
+                  <div className="space-y-4">
+                    {/* File Info */}
+                    <div className="flex items-center gap-4">
+                      <div className="flex-shrink-0 p-3 bg-primary/10 rounded-lg">
+                        <FileText className="h-8 w-8 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate dashboard-card-text">
+                          {uploadedResume.original_name}
+                        </p>
+                        <div className="flex items-center gap-3 text-sm dashboard-card-text">
+                          <span>{formatFileSize(uploadedResume.size)}</span>
+                          <span>•</span>
+                          <span>{getFileTypeDisplay(uploadedResume.type)}</span>
+                        </div>
+                      </div>
+                      <Badge variant="secondary">
+                        {getFileTypeDisplay(uploadedResume.type)}
+                      </Badge>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4 border-t border-border">
+                      <Button
+                        variant="outline"
+                        onClick={handleDownloadResume}
+                        className="flex-1 dashboard-card-text"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 dashboard-card-text"
+                      >
+                        <Edit3 className="h-4 w-4 mr-2" />
+                        Replace
+                      </Button>
+                    </div>
+
+                    {/* File Preview Area */}
+                    <div className="mt-6">
+                      <FilePreview 
+                        fileUrl={`/api/user/file/${uploadedResume.id}`}
+                        fileName={uploadedResume.original_name}
+                        fileType={uploadedResume.type}
+                        fileSize={uploadedResume.size}
+                        uploadedAt={new Date(uploadedResume.created_at).toLocaleDateString()}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              ) : (
+                <Card className="p-6 text-center">
+                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="dashboard-card-text">No resume found</p>
+                  <Button variant="outline" className="mt-4">
+                    Upload Resume
+                  </Button>
+                </Card>
+              )}
+            </div>
+
+            {/* Right Column - Job Queue */}
+            <div>
+              <JobQueue onStartApplying={handleStartApplying} />
+            </div>
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
