@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\GuestUploadController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\ApiResumeParseController;
 
 // API routes use Sanctum's EnsureFrontendRequestsAreStateful middleware for sessions
 Route::get('/auth/check', [AuthController::class, 'check']);
@@ -19,4 +20,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/resume', [UserController::class, 'getResume']);
     Route::get('/user/files', [UserController::class, 'getAllFiles']);
     Route::get('/user/file/{id}', [UserController::class, 'downloadFile']);
+    
+    // Resume Parsing API endpoints
+    Route::apiResource('resume/parse', ApiResumeParseController::class);
+    Route::post('/resume/parse/{id}/match', [ApiResumeParseController::class, 'matchJob']);
+    Route::post('/resume/parse/{id}/reparse', [ApiResumeParseController::class, 'reparse']);
 });
