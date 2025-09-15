@@ -88,4 +88,29 @@ class UserController extends Controller
             'Content-Type' => $uploadedFile->mime_type,
         ]);
     }
+
+    public function getWorkExperience(Request $request)
+    {
+        $user = $request->user();
+        
+        $workExperience = $user->workExperience()
+            ->orderBy('start_date', 'desc')
+            ->get()
+            ->map(function ($work) {
+                return [
+                    'id' => $work->id,
+                    'job_title' => $work->job_title,
+                    'company' => $work->company,
+                    'location' => $work->location,
+                    'date_range' => $work->date_range,
+                    'description' => $work->description,
+                    'achievements' => $work->achievements,
+                    'is_current' => $work->is_current,
+                ];
+            });
+
+        return response()->json([
+            'work_experience' => $workExperience,
+        ]);
+    }
 }

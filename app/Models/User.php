@@ -50,4 +50,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(UploadedFile::class);
     }
+
+    public function workExperience()
+    {
+        return $this->hasMany(UserWork::class)->orderBy('start_date', 'desc');
+    }
 }

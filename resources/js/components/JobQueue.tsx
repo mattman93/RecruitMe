@@ -27,6 +27,7 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRelevantJobs, setIsRelevantJobs] = useState(false);
 
   useEffect(() => {
     fetchLeads();
@@ -34,12 +35,25 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
 
   const fetchLeads = async () => {
     try {
-      const response = await fetch('/api/leads', {
+      // First try to get relevant jobs based on user's resume
+      let response = await fetch('/api/leads/relevant?limit=50', {
         credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
         },
       });
+
+      // If relevant jobs fail or return empty, fallback to all jobs
+      if (!response.ok || response.status === 401) {
+        response = await fetch('/api/leads?limit=50', {
+          credentials: 'include',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+          },
+        });
+      }
 
       if (!response.ok) {
         throw new Error('Failed to fetch leads');
@@ -47,6 +61,9 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
 
       const data = await response.json();
       setLeads(data.data || []);
+      
+      // Check if we got relevant jobs (has matching_strategy in response)
+      setIsRelevantJobs(!!data.matching_strategy);
     } catch (error) {
       console.error('Error fetching leads:', error);
       setError('Failed to load job opportunities');
@@ -104,19 +121,29 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
     );
   }
 
+  // Limit to first 10 jobs for display
+  const displayLeads = leads.slice(0, 10);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-white">Job Opportunities</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-semibold text-white">Job Opportunities</h2>
+          {isRelevantJobs && (
+            <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white">
+              AI Matched
+            </Badge>
+          )}
+        </div>
         <Badge variant="secondary" className="px-3 py-1">
-          {leads.length} jobs found
+          {displayLeads.length} of {leads.length} jobs
         </Badge>
       </div>
 
       {/* Job Cards */}
       <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-        {leads.map((lead) => (
+        {displayLeads.map((lead) => (
           <Card key={lead.id} className="p-6 hover:shadow-md transition-shadow cursor-pointer">
             <div className="space-y-4">
               {/* Header */}
@@ -168,7 +195,7 @@ export function JobQueue({ onStartApplying }: JobQueueProps) {
           size="lg"
         >
           <Play className="mr-3 h-6 w-6" />
-          Start Applying to {leads.length} Jobs
+          Start Applying to {displayLeads.length} Jobs
         </Button>
       </div>
     </div>

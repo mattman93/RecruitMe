@@ -73,14 +73,54 @@ class FetchJobsFromHiringCafe implements ShouldQueue
 
     private function fetchAllJobs(): void
     {
-        $page = 0;
-        $maxPages = 10; // Prevent infinite loops
+        $maxBatches = 10; // Maximum batches to fetch per run
         $batchSize = 40; // Based on API response structure
+        $maxEstimatedPages = 100; // Estimate total pages available on hiring.cafe
+        
+        // Generate random pages to fetch for better discovery
+        $randomPages = $this->generateRandomPages($maxBatches, $maxEstimatedPages);
+        
+        Log::info("Fetching from randomized pages: " . implode(', ', $randomPages));
+        
+        foreach ($randomPages as $page) {
+            $hasJobs = $this->fetchJobsBatch($page, $batchSize);
+            
+            // If a random page returns no jobs, it might be beyond the available data
+            // but continue with other pages as they might have jobs
+            if (!$hasJobs) {
+                Log::info("No jobs found on page {$page}, continuing with other pages");
+            }
+            
+            // Add small delay between requests to be respectful to the API
+            usleep(500000); // 0.5 second delay
+        }
+    }
 
-        do {
-            $hasMoreJobs = $this->fetchJobsBatch($page, $batchSize);
-            $page++;
-        } while ($hasMoreJobs && $page < $maxPages);
+    /**
+     * Generate an array of random page numbers to fetch
+     */
+    private function generateRandomPages(int $maxBatches, int $maxEstimatedPages): array
+    {
+        // Generate unique random page numbers
+        $pages = [];
+        $attempts = 0;
+        $maxAttempts = $maxBatches * 3; // Prevent infinite loops
+        
+        while (count($pages) < $maxBatches && $attempts < $maxAttempts) {
+            $randomPage = random_int(1, $maxEstimatedPages);
+            
+            // Ensure we don't duplicate pages
+            if (!in_array($randomPage, $pages)) {
+                $pages[] = $randomPage;
+            }
+            
+            $attempts++;
+        }
+        
+        // Sort pages for consistent logging
+        sort($pages);
+        
+        return $pages;
     }
 
     private function fetchJobsBatch(int $page, int $size): bool
@@ -344,7 +384,7 @@ class FetchJobsFromHiringCafe implements ShouldQueue
 
     private function sendRateLimitEmail(): void
     {
-        $nextAllowedTime = $this->dataSource->last_fetched_at?->addHour()?->format('H:i T') ?? 'Unknown';
+        $nextAllowedTime = $this->dataSource->last_fetched_at?->copy()->addHour()?->format('H:i T') ?? 'Unknown';
         
         $subject = "⏱️ Hiring.cafe Job Fetch - Rate Limited";
         $message = "
@@ -389,13 +429,18 @@ class FetchJobsFromHiringCafe implements ShouldQueue
     private function sendEmail(string $to, string $subject, string $message): void
     {
         try {
+            Log::info("Attempting to send email to: {$to}, Subject: {$subject}");
+            
             Mail::raw(strip_tags($message), function ($mail) use ($to, $subject, $message) {
                 $mail->to($to)
                      ->subject($subject)
                      ->html($message);
             });
+            
+            Log::info("Email sent successfully to: {$to}");
         } catch (\Exception $e) {
             Log::error('Failed to send email: ' . $e->getMessage());
+            Log::error('Email details - To: ' . $to . ', Subject: ' . $subject);
         }
     }
 

@@ -14,8 +14,13 @@ Schedule::command('hiring-cafe:fetch-jobs')
     ->withoutOverlapping(30)
     ->appendOutputTo(storage_path('logs/hiring_cafe_jobs.log'));
 
-// Daily midnight job for comprehensive data collection
-Schedule::command('hiring-cafe:fetch-jobs')
-    ->dailyAt('00:00')
-    ->withoutOverlapping(30)
-    ->appendOutputTo(storage_path('logs/hiring_cafe_midnight.log'));
+// Scheduler heartbeat - runs every minute to track scheduler health
+Schedule::call(function () {
+    \Illuminate\Support\Facades\Cache::put('scheduler_heartbeat', now(), 3600);
+    \Illuminate\Support\Facades\Log::info('Scheduler heartbeat: ' . now()->format('Y-m-d H:i:s'));
+})->everyMinute();
+
+// Health monitoring - runs every 15 minutes
+Schedule::command('scheduler:monitor')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(5);

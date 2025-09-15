@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\ParsedResume;
+use App\Models\UserWork;
+use App\Models\UploadedFile as UploadedFileModel;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -33,7 +35,7 @@ class ResumeParserService
         $parsedData = $this->parseWithOpenAI($rawText);
         
         // Create and save the parsed resume
-        return $this->saveParsedResume([
+        $parsedResume = $this->saveParsedResume([
             'user_id' => $userId,
             'original_filename' => $file->getClientOriginalName(),
             'file_path' => $filePath,
@@ -44,6 +46,11 @@ class ResumeParserService
             'parsing_method' => 'openai',
             'parsed_at' => now(),
         ], $parsedData);
+
+        // Save work experience to separate table
+        $this->saveWorkExperience($userId, $parsedData['work_experience'] ?? [], $parsedResume);
+
+        return $parsedResume;
     }
 
     /**
@@ -52,7 +59,7 @@ class ResumeParserService
     protected function storeFile(UploadedFile $file, int $userId): string
     {
         $fileName = time() . '_' . $userId . '_' . $file->getClientOriginalName();
-        $path = $file->storeAs('resumes/' . $userId, $fileName, 'private');
+        $path = $file->storeAs('resumes/' . $userId, $fileName, 'local');
         
         return $path;
     }
@@ -164,7 +171,7 @@ class ResumeParserService
     protected function buildParsingPrompt(): string
     {
         return <<<'PROMPT'
-Extract basic information from this resume and return JSON with these fields:
+Extract detailed information from this resume and return JSON with these fields:
 
 {
     "full_name": "Name",
@@ -175,12 +182,27 @@ Extract basic information from this resume and return JSON with these fields:
     "current_company": "current employer",
     "years_of_experience": 5,
     "technical_skills": ["skill1", "skill2"],
-    "work_experience": [{"title": "Job Title", "company": "Company", "start_date": "2022-01", "end_date": "2024-01", "is_current": true}],
+    "work_experience": [
+        {
+            "title": "Job Title", 
+            "company": "Company", 
+            "location": "City, State",
+            "start_date": "2022-01", 
+            "end_date": "2024-01", 
+            "is_current": true,
+            "description": "Brief overview of the role and responsibilities",
+            "achievements": [
+                "Specific achievement or bullet point",
+                "Another achievement or responsibility",
+                "Key accomplishment with metrics"
+            ]
+        }
+    ],
     "education": [{"degree": "Bachelor's", "school": "University", "graduation_date": "2020"}],
     "parsing_confidence": 0.9
 }
 
-Return only valid JSON. Use null for missing fields.
+Extract ALL bullet points, achievements, and detailed descriptions for each job. Include specific metrics, technologies used, and accomplishments mentioned. Return only valid JSON. Use null for missing fields.
 PROMPT;
     }
 
@@ -263,5 +285,67 @@ PROMPT;
         ]);
         
         return ParsedResume::create($resumeData);
+    }
+
+    /**
+     * Save work experience to user_work table.
+     */
+    protected function saveWorkExperience(int $userId, array $workExperience, ParsedResume $parsedResume): void
+    {
+        if (empty($workExperience)) {
+            return;
+        }
+
+        // Find the corresponding UploadedFile record
+        $uploadedFile = UploadedFileModel::where('user_id', $userId)
+            ->where('file_path', $parsedResume->file_path)
+            ->first();
+
+        foreach ($workExperience as $work) {
+            UserWork::create([
+                'user_id' => $userId,
+                'uploaded_file_id' => $uploadedFile?->id,
+                'job_title' => $work['title'] ?? 'Unknown Position',
+                'company' => $work['company'] ?? 'Unknown Company',
+                'location' => $work['location'] ?? null,
+                'start_date' => $this->parseDate($work['start_date'] ?? null),
+                'end_date' => $this->parseDate($work['end_date'] ?? null),
+                'is_current' => $work['is_current'] ?? false,
+                'description' => $work['description'] ?? null,
+                'achievements' => $work['achievements'] ?? null,
+            ]);
+        }
+    }
+
+    /**
+     * Parse date string to proper format.
+     */
+    protected function parseDate(?string $dateString): ?string
+    {
+        if (!$dateString || $dateString === 'null' || $dateString === 'Present') {
+            return null;
+        }
+
+        try {
+            // Try parsing various date formats
+            $formats = ['Y-m-d', 'Y-m', 'Y', 'M Y', 'F Y', 'm/Y', 'Y/m'];
+            
+            foreach ($formats as $format) {
+                $date = \DateTime::createFromFormat($format, $dateString);
+                if ($date !== false) {
+                    return $date->format('Y-m-d');
+                }
+            }
+
+            // If no format matches, try strtotime
+            $timestamp = strtotime($dateString);
+            if ($timestamp !== false) {
+                return date('Y-m-d', $timestamp);
+            }
+        } catch (\Exception $e) {
+            Log::warning("Could not parse date: $dateString", ['error' => $e->getMessage()]);
+        }
+
+        return null;
     }
 }

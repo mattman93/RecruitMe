@@ -6,6 +6,7 @@ import { Badge } from "./ui/badge";
 import { FilePreview } from "./FilePreview";
 import { JobQueue } from "./JobQueue";
 import { Footer } from "./Footer";
+import WorkExperience from "./WorkExperience";
 
 interface UploadedResume {
   id: number;
@@ -17,12 +18,25 @@ interface UploadedResume {
   created_at: string;
 }
 
+interface WorkExperienceItem {
+  id: number;
+  job_title: string;
+  company: string;
+  location?: string;
+  date_range: string;
+  description?: string;
+  achievements?: string[];
+  is_current: boolean;
+}
+
 export function Dashboard() {
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
+  const [workExperience, setWorkExperience] = useState<WorkExperienceItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchUploadedResume();
+    fetchWorkExperience();
   }, []);
   
 
@@ -49,6 +63,25 @@ const fetchUploadedResume = async () => {
     console.error('Error fetching resume:', error);
   } finally {
     setIsLoading(false);
+  }
+};
+
+const fetchWorkExperience = async () => {
+  try {
+    const response = await fetch('/api/user/work-experience', {
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setWorkExperience(data.work_experience || []);
+    }
+  } catch (error) {
+    console.error('Error fetching work experience:', error);
   }
 };
 
@@ -205,6 +238,11 @@ const fetchUploadedResume = async () => {
                   </Button>
                 </Card>
               )}
+              
+              {/* Work Experience Section - Below FilePreview */}
+              <Card className="p-6">
+                <WorkExperience workExperience={workExperience} />
+              </Card>
             </div>
 
             {/* Right Column - Job Queue */}
