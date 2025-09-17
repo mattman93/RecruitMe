@@ -23,11 +23,12 @@ class JobApplicationService
             ->first();
         
         if (!$siteStructure) {
-            // New site - needs structure mapping
+            // For unknown sites, defer analysis to batch processing to avoid timeouts
             return [
-                'strategy' => 'manual_required',
-                'reason' => 'Unknown site structure - requires mapping',
-                'site_structure' => null
+                'strategy' => 'semi_auto', // Default strategy for unknown sites
+                'reason' => 'Unknown site - analysis will be performed during processing',
+                'site_structure' => null,
+                'requires_analysis' => true
             ];
         }
         
@@ -92,6 +93,11 @@ class JobApplicationService
         ]);
         
         $this->logStep($application, "Starting application process");
+        
+        // Perform site analysis if needed (for unknown sites)
+        if (!$application->jobSiteStructure) {
+            $this->analyzeSiteStructureIfNeeded($application);
+        }
         
         try {
             switch ($application->application_method) {
@@ -312,6 +318,72 @@ class JobApplicationService
             'application_id' => $application->id,
             'message' => $message
         ]);
+    }
+    
+    /**
+     * Analyze site structure if needed for unknown sites
+     */
+    protected function analyzeSiteStructureIfNeeded(JobApplication $application): void
+    {
+        $lead = $application->lead;
+        $domain = $this->extractDomainFromUrl($lead->source_url);
+        
+        // Check if we already have structure for this domain
+        $existingStructure = JobSiteStructure::where('domain', $domain)->first();
+        if ($existingStructure) {
+            $application->update(['job_site_structure_id' => $existingStructure->id]);
+            return;
+        }
+        
+        $this->logStep($application, "Analyzing site structure for unknown domain: {$domain}");
+        
+        try {
+            $analysisService = app(SiteStructureAnalysisService::class);
+            $analysisResult = $analysisService->analyzeJobSite($lead);
+            
+            if ($analysisResult['success']) {
+                $siteStructure = JobSiteStructure::create([
+                    'domain' => $domain,
+                    'platform_type' => $analysisResult['platform_type'],
+                    'form_selectors' => $analysisResult['form_selectors'] ?? [],
+                    'apply_button_selectors' => $analysisResult['apply_button_selectors'] ?? [],
+                    'field_mappings' => $analysisResult['field_mappings'] ?? [],
+                    'navigation_flow' => $analysisResult['navigation_flow'] ?? [],
+                    'last_analyzed_at' => now(),
+                    'is_active' => true
+                ]);
+                
+                $application->update(['job_site_structure_id' => $siteStructure->id]);
+                $this->logStep($application, "Site structure analysis completed for {$domain}");
+            } else {
+                $this->logStep($application, "Site structure analysis failed: " . ($analysisResult['error'] ?? 'Unknown error'));
+                
+                // Create placeholder structure for manual processing
+                $siteStructure = JobSiteStructure::create([
+                    'domain' => $domain,
+                    'platform_type' => 'unknown',
+                    'form_selectors' => [],
+                    'apply_button_selectors' => [],
+                    'field_mappings' => [],
+                    'navigation_flow' => [],
+                    'last_analyzed_at' => now(),
+                    'is_active' => false,
+                    'analysis_failed' => true
+                ]);
+                
+                $application->update([
+                    'job_site_structure_id' => $siteStructure->id,
+                    'application_method' => 'manual_required'
+                ]);
+            }
+        } catch (\Exception $e) {
+            $this->logStep($application, "Site analysis error: " . $e->getMessage());
+            Log::error("Site structure analysis failed", [
+                'domain' => $domain,
+                'url' => $lead->source_url,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
     
     /**

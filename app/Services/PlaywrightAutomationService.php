@@ -36,6 +36,11 @@ class PlaywrightAutomationService
         array $formData, 
         JobApplication $application
     ): array {
+        // Check if we're in test mode
+        if (env('TEST_MODE', false)) {
+            return $this->simulateApplication($lead, $siteStructure, $formData, $application, 'full');
+        }
+        
         $startTime = microtime(true);
         
         try {
@@ -87,6 +92,11 @@ class PlaywrightAutomationService
         array $formData, 
         JobApplication $application
     ): array {
+        // Check if we're in test mode
+        if (env('TEST_MODE', false)) {
+            return $this->simulateApplication($lead, $siteStructure, $formData, $application, 'fill_only');
+        }
+        
         try {
             $script = $this->generatePlaywrightScript([
                 'url' => $lead->source_url,
@@ -414,6 +424,66 @@ automateApplication();
 JAVASCRIPT;
     }
     
+    /**
+     * Simulate application processing for TEST_MODE
+     */
+    protected function simulateApplication(
+        Lead $lead, 
+        ?JobSiteStructure $siteStructure, 
+        array $formData, 
+        JobApplication $application,
+        string $mode = 'full'
+    ): array {
+        // Simulate processing time
+        sleep(rand(2, 5));
+        
+        // Simulate random success/failure (80% success rate)
+        $success = rand(1, 100) <= 80;
+        
+        if ($success) {
+            return [
+                'success' => true,
+                'final_url' => $lead->source_url . '/confirmation',
+                'confirmation_number' => 'TEST-' . strtoupper(substr(md5($application->id . time()), 0, 8)),
+                'confirmation_message' => 'Thank you for your application! We will review it and get back to you soon.',
+                'duration' => rand(15, 45),
+                'screenshots' => [
+                    "test_app_{$application->id}_initial.png",
+                    "test_app_{$application->id}_form.png",
+                    "test_app_{$application->id}_filled.png",
+                    $mode === 'full' ? "test_app_{$application->id}_submitted.png" : null
+                ],
+                'session_data' => $mode === 'fill_only' ? [
+                    'browser_session_id' => 'test-session-' . $application->id,
+                    'filled_fields' => [
+                        'First Name: ' . $formData['personal']['first_name'],
+                        'Last Name: ' . $formData['personal']['last_name'],
+                        'Email: ' . $formData['personal']['email'],
+                        'Resume uploaded successfully'
+                    ]
+                ] : null
+            ];
+        } else {
+            // Simulate various failure scenarios
+            $errors = [
+                'Could not find application form on the page',
+                'Failed to upload resume file',
+                'Application form validation failed',
+                'Site returned an error during submission',
+                'Could not find submit button'
+            ];
+            
+            return [
+                'success' => false,
+                'error' => $errors[array_rand($errors)],
+                'duration' => rand(10, 30),
+                'screenshots' => [
+                    "test_app_{$application->id}_error.png"
+                ]
+            ];
+        }
+    }
+
     /**
      * Execute the Playwright script
      */

@@ -56,16 +56,38 @@ class LeadController extends Controller
             ], 401);
         }
 
-        $limit = $request->integer('limit', 50);
-        $relevantJobs = $this->jobMatchingService->findRelevantJobs($user->id, $limit);
+        try {
+            $limit = $request->integer('limit', 50);
+            $relevantJobs = $this->jobMatchingService->findRelevantJobs($user->id, $limit);
 
-        return response()->json([
-            'data' => $relevantJobs->values(),
-            'total' => $relevantJobs->count(),
-            'matching_strategy' => $relevantJobs->first()?->skill_matches ? 'skills-based' : 'experience-based',
-            'message' => $relevantJobs->isEmpty() 
-                ? 'No relevant jobs found. Try updating your resume or work experience.' 
-                : "Found {$relevantJobs->count()} relevant job matches.",
-        ]);
+            return response()->json([
+                'data' => $relevantJobs->values(),
+                'total' => $relevantJobs->count(),
+                'matching_strategy' => $relevantJobs->first()?->skill_matches ? 'skills-based' : 'experience-based',
+                'message' => $relevantJobs->isEmpty() 
+                    ? 'No relevant jobs found. Try updating your resume or work experience.' 
+                    : "Found {$relevantJobs->count()} relevant job matches.",
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in relevant jobs endpoint', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            // Fallback to regular jobs if relevant matching fails
+            $leads = Lead::where('is_active', true)
+                        ->orderBy('created_at', 'desc')
+                        ->limit($limit)
+                        ->get();
+
+            return response()->json([
+                'data' => $leads,
+                'total' => $leads->count(),
+                'matching_strategy' => 'fallback',
+                'message' => 'Showing all available jobs (relevance matching temporarily unavailable)',
+            ]);
+        }
     }
 }

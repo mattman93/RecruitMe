@@ -39,14 +39,20 @@ class JobApplicationController extends Controller
      */
     public function queueApplications(Request $request)
     {
+        \Log::info('Queue applications request:', [
+            'data' => $request->all(),
+            'user_id' => Auth::id()
+        ]);
+        
         $validator = Validator::make($request->all(), [
             'lead_ids' => 'required|array',
             'lead_ids.*' => 'required|integer|exists:leads,id',
             'custom_responses' => 'array',
-            'application_method' => 'string|in:auto,semi_auto,iframe'
+            'application_method' => 'string|in:auto,semi_auto,iframe,full_auto'
         ]);
 
         if ($validator->fails()) {
+            \Log::error('Validation failed:', $validator->errors()->toArray());
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
@@ -90,11 +96,53 @@ class JobApplicationController extends Controller
             }
         }
 
+        // If we have queued applications, start batch processing
+        if (!empty($queuedApplications)) {
+            $applicationIds = array_column($queuedApplications, 'id');
+            $batchId = 'batch_' . time() . '_' . $user->id;
+            
+            // Generate a temporary access token for batch status polling
+            $accessToken = 'token_' . bin2hex(random_bytes(16));
+            
+            // Store the access token mapping in cache (expires in 2 hours)
+            \Illuminate\Support\Facades\Cache::put("batch_token_{$accessToken}", [
+                'batch_id' => $batchId,
+                'user_id' => $user->id,
+                'expires_at' => now()->addHours(2)->toISOString()
+            ], 120); // 2 hours in minutes
+            
+            // Create initial batch status in cache to prevent race condition
+            \Illuminate\Support\Facades\Cache::put("job_application_batch_{$batchId}", [
+                'batch_id' => $batchId,
+                'user_id' => $user->id,
+                'status' => 'queued',
+                'updated_at' => now()->toDateTimeString(),
+                'total' => count($queuedApplications),
+                'completed' => 0,
+                'successful' => 0,
+                'failed' => 0,
+                'current_application' => null
+            ], 120); // 2 hours in minutes
+            
+            // Dispatch the batch processing job
+            \App\Jobs\ProcessJobApplicationsBatch::dispatch($user->id, $applicationIds, $batchId);
+            
+            return response()->json([
+                'success' => true,
+                'queued_applications' => $queuedApplications,
+                'batch_id' => $batchId,
+                'access_token' => $accessToken,
+                'errors' => $errors,
+                'message' => count($queuedApplications) . ' applications queued and processing started',
+                'status_endpoint' => "/api/applications/batch-status/{$batchId}?token={$accessToken}"
+            ]);
+        }
+
         return response()->json([
-            'success' => true,
-            'queued_applications' => $queuedApplications,
+            'success' => false,
+            'queued_applications' => [],
             'errors' => $errors,
-            'message' => count($queuedApplications) . ' applications queued successfully'
+            'message' => 'No applications were queued'
         ]);
     }
 
@@ -196,6 +244,84 @@ class JobApplicationController extends Controller
             'application' => $application->fresh(),
             'message' => 'Application status updated successfully'
         ]);
+    }
+
+    /**
+     * Get batch processing status
+     */
+    public function batchStatus($batchId)
+    {
+        \Log::info('Batch status request', [
+            'batch_id' => $batchId,
+            'user_authenticated' => Auth::check(),
+            'user_id' => Auth::id(),
+            'has_token' => request()->has('token')
+        ]);
+        
+        // Check if token-based access is being used
+        $token = request()->get('token');
+        if ($token) {
+            $tokenData = \Illuminate\Support\Facades\Cache::get("batch_token_{$token}");
+            
+            if (!$tokenData || $tokenData['batch_id'] !== $batchId) {
+                \Log::warning('Batch status: Invalid or expired token', [
+                    'batch_id' => $batchId,
+                    'token' => $token,
+                    'token_data' => $tokenData
+                ]);
+                return response()->json(['error' => 'Invalid or expired access token'], 401);
+            }
+            
+            \Log::info('Batch status: Token-based access granted', [
+                'batch_id' => $batchId,
+                'user_id' => $tokenData['user_id']
+            ]);
+            
+            // Use token-based access - skip session authentication
+            $userId = $tokenData['user_id'];
+        } else {
+            // Fallback to session-based authentication
+            $user = Auth::user();
+            
+            if (!$user) {
+                \Log::warning('Batch status: User not authenticated', [
+                    'batch_id' => $batchId,
+                    'session_id' => request()->session()->getId(),
+                    'has_session' => request()->hasSession()
+                ]);
+                return response()->json(['error' => 'Unauthenticated'], 401);
+            }
+            
+            $userId = $user->id;
+        }
+        
+        $statusData = \Illuminate\Support\Facades\Cache::get("job_application_batch_{$batchId}");
+        
+        \Log::info('Batch status cache lookup', [
+            'batch_id' => $batchId,
+            'cache_key' => "job_application_batch_{$batchId}",
+            'found' => $statusData !== null,
+            'data' => $statusData
+        ]);
+        
+        if (!$statusData) {
+            return response()->json([
+                'error' => 'Batch not found or expired'
+            ], 404);
+        }
+        
+        // Verify the batch belongs to the authenticated user
+        if ($statusData['user_id'] !== $userId) {
+            \Log::warning('Batch status: User mismatch', [
+                'expected_user_id' => $statusData['user_id'],
+                'actual_user_id' => $userId
+            ]);
+            return response()->json([
+                'error' => 'Unauthorized'
+            ], 403);
+        }
+        
+        return response()->json($statusData);
     }
 
     /**

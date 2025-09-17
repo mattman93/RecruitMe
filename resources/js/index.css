@@ -1711,7 +1711,7 @@
 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-primary\/20 {
-      background-color: color-mix(in oklab, var(--primary) 20%, transparent);
+     background-color: color-mix(in oklab, #4e5fa8 45%, transparent);
     }
   }
 
@@ -4438,7 +4438,8 @@
   --card: #fff;
   --card-foreground: var(--dark-gray);
   --popover: #fff;
-  --popover-foreground: var(--dark-gray);
+  /* --popover-foreground: var(--dark-gray); */
+  --popover-foreground: #e77f92;
   --primary: var(--mint-green);
   --primary-foreground: #fff;
   --secondary: var(--navy);

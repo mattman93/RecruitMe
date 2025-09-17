@@ -14,10 +14,15 @@ Route::get('/auth/check', [AuthController::class, 'check']);
 Route::post('/guest/resume-upload', [GuestUploadController::class, 'upload']);
 Route::get('/guest/resume-preview/{sessionId}', [GuestUploadController::class, 'preview']);
 
+// Batch status endpoint - supports both token and session auth
+Route::get('/applications/batch-status/{batchId}', [\App\Http\Controllers\Api\JobApplicationController::class, 'batchStatus']);
+
+// Leads endpoints - handle auth internally
+Route::get('/leads', [LeadController::class, 'index']);
+Route::get('/leads/relevant', [LeadController::class, 'relevant']);
+
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
-    Route::get('/leads', [LeadController::class, 'index']);
-    Route::get('/leads/relevant', [LeadController::class, 'relevant']);
     Route::get('/user/resume', [\App\Http\Controllers\Api\UserController::class, 'getResume']);
     Route::get('/user/files', [\App\Http\Controllers\Api\UserController::class, 'getAllFiles']);
     Route::get('/user/file/{id}', [\App\Http\Controllers\Api\UserController::class, 'downloadFile']);
@@ -34,4 +39,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/applications/process', [\App\Http\Controllers\Api\JobApplicationController::class, 'processApplications']);
     Route::patch('/applications/{id}/status', [\App\Http\Controllers\Api\JobApplicationController::class, 'updateStatus']);
     Route::get('/applications/analytics/summary', [\App\Http\Controllers\Api\JobApplicationController::class, 'analytics']);
+    
+    // Debug route to test authentication
+    Route::get('/test-auth', function() {
+        \Log::info('Test auth route hit', ['user_id' => \Auth::id(), 'authenticated' => \Auth::check()]);
+        return response()->json(['authenticated' => \Auth::check(), 'user_id' => \Auth::id()]);
+    });
 });

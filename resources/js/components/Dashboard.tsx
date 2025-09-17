@@ -247,7 +247,7 @@ const fetchWorkExperience = async () => {
 
             {/* Right Column - Job Queue */}
             <div>
-              <JobQueue onStartApplying={handleStartApplying} />
+              <JobQueue />
             </div>
           </div>
         </div>
