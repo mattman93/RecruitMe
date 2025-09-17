@@ -1,79 +1,47 @@
-import { Upload, Search, Send, CheckCircle } from "lucide-react";
+import { Button } from "./ui/button";
+import { useParallax } from "./hooks/useScrollAnimation";
 
-export function HeroSection() {
+interface HeroSectionProps {
+  onSeeMatches?: () => void;
+  onDashboard?: () => void;
+  isAuthenticated?: boolean;
+}
+
+export function HeroSection({ onSeeMatches, onDashboard, isAuthenticated }: HeroSectionProps) {
+  const offsetY = useParallax();
+  
   return (
-    <div>
-      {/* Hero Section with Background Image */}
-      <div className="px-6 py-24 hero-background">
-        <div className="max-w-6xl mx-auto relative z-10">
-          {/* Main Hero Content */}
-          <div className="text-center mb-8">
-            <div className="mb-6 welcome-text">
-              <img 
-                src="/images/welcome-appliflow.svg" 
-                alt="Welcome to AppliFlow" 
-                className="mx-auto max-w-full h-auto"
-                style={{ maxHeight: '200px' }}
-              />
-            </div>
-            <p className="text-xl text-white/90 max-w-3xl mx-auto mb-8 leading-relaxed tag-line">
-              Get started by uploading your resume and letting our system
-              analyze the best job matches for you. Then hit "Apply" and let AppliFlow do the rest.
-              <p className="text-lg text-white/80 font-medium">It's that simple</p>
-            </p>
-          </div>
+    <section className="w-full hero-gradient relative overflow-hidden">
+      <div 
+        className="parallax-bg absolute inset-0 hero-gradient"
+        style={{ transform: `translateY(${offsetY * 0.5}px)` }}
+      />
+      <div className="max-w-4xl mx-auto px-6 py-32 lg:py-40 text-center relative z-10">
+        <div className="mb-8">
+          <img 
+            src="/images/af-main.png" 
+            alt="AppliFlow Logo" 
+            className="h-auto mx-auto mb-1"
+            style={{ maxWidth: '75%' }}
+          />
         </div>
+        
+        <h1 className="text-white mb-6 max-w-4xl mx-auto">
+          Your AI job search copilot for tech professionals.
+        </h1>
+        
+        <p className="text-lg text-white/90 mb-12 max-w-2xl mx-auto">
+          Find the best tech jobs, cut the busywork, and apply with confidence.
+        </p>
+        
+        <Button 
+          className="bg-white text-[#6366f1] hover:bg-white/90 px-8 py-3 font-semibold rounded-lg border-0 transition-all duration-300 shadow-lg btn-glow-white"
+          size="lg"
+          onClick={isAuthenticated ? onDashboard : onSeeMatches}
+        >
+          See Your Matches
+        </Button>
       </div>
-
-      {/* How It Works Section - Navy Gradient Background */}
-      <div className="px-6 py-16">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-3xl text-white text-center font-semibold how-it-works-spacing mb-12">
-            How It Works
-          </h2>
-          <div className="flex flex-col sm:flex-row gap-8 justify-center items-center">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Upload className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-white font-semibold mb-2">Upload Resume</h3>
-              <p className="text-white/70 text-sm">
-                Upload your resume in PDF, DOC, or image format
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Search className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-white font-semibold mb-2">AI Analysis</h3>
-              <p className="text-white/70 text-sm">
-                Our AI analyzes your skills and finds matching opportunities
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Send className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-white font-semibold mb-2">Auto Apply</h3>
-              <p className="text-white/70 text-sm">
-                We automatically apply to relevant positions for you
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-white font-semibold mb-2">Get Hired</h3>
-              <p className="text-white/70 text-sm">
-                Track applications and receive interview invitations
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }

@@ -1,71 +1,69 @@
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { User, Settings, HelpCircle, LogOut } from "lucide-react";
+import { Button } from "./ui/button";
+import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { Menu } from "lucide-react";
 
 interface NavbarProps {
   isAuthenticated?: boolean;
   onLogout?: () => void;
+  onLogin?: () => void;
+  onHome?: () => void;
+  onDashboard?: () => void;
 }
 
-export function Navbar({ isAuthenticated = false, onLogout }: NavbarProps) {
+export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard }: NavbarProps) {
   return (
-    <nav className="w-full bg-card border-b border-border px-6 py-4 shadow-sm">
-      <div className="flex justify-between items-center">
+    <nav className="w-full bg-white border-b border-[#E6E9ED] px-6 py-4">
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center">
-          <img 
-            src="/images/appliflow-logo-v2.svg" 
-            alt="AppliFlow" 
-            className=""
-          />
-        </div>
-        
-        {/* User Menu */}
-        <div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="rounded-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all hover:scale-105">
-              <Avatar className="h-10 w-10 cursor-pointer border-2 border-primary/20">
-                <AvatarImage src="" alt="Profile" />
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  <User className="h-5 w-5" />
-                </AvatarFallback>
-              </Avatar>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 shadow-lg border border-border">
-            <DropdownMenuItem className="hover:bg-primary/5 transition-colors">
-              <User className="mr-2 h-4 w-4 text-primary" />
-              My Account
-            </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-primary/5 transition-colors">
-              <Settings className="mr-2 h-4 w-4 text-primary" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-primary/5 transition-colors">
-              <HelpCircle className="mr-2 h-4 w-4 text-primary" />
-              Help
-            </DropdownMenuItem>
-            {isAuthenticated && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  className="hover:bg-destructive/5 transition-colors text-destructive"
-                  onClick={onLogout}
-                >
-                  <LogOut className="mr-2 h-4 w-4" onClick={onLogout}/>
-                  Sign Out
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <button onClick={onHome} className="flex items-center">
+          <div className="w-10 h-10 bg-[#2D5BFF] rounded-lg flex items-center justify-center hover:bg-[#1E3FCC] transition-colors">
+            <span className="text-white font-bold text-lg mono">AF</span>
+          </div>
+        </button>
+
+        {/* Right side navigation */}
+        <div className="flex items-center gap-4">
+          {!isAuthenticated ? (
+            <>
+              <button 
+                onClick={onLogin}
+                className="text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors"
+              >
+                Login
+              </button>
+              
+              <Button 
+                className="bg-[#2D5BFF] hover:bg-[#1E3FCC] text-white px-6 py-2"
+              >
+                AppliFlow Enterprise
+              </Button>
+            </>
+          ) : (
+            <>
+              <button 
+                onClick={onDashboard}
+                className="text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors"
+              >
+                Jobs Dashboard
+              </button>
+              
+              <Button 
+                onClick={onLogout}
+                variant="outline"
+                className="text-[#4A4A4A] hover:text-[#1A1A1A] border-[#E6E9ED] hover:bg-[#F5F8FF]"
+              >
+                Logout
+              </Button>
+            </>
+          )}
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            className="p-2 hover:bg-[#F5F8FF]"
+          >
+            <Menu className="h-5 w-5 text-[#4A4A4A]" />
+          </Button>
         </div>
       </div>
     </nav>

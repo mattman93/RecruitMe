@@ -8,11 +8,17 @@ import { Login } from "./components/Login";
 import { Register } from "./components/Register";
 import { Dashboard } from "./components/Dashboard";
 import { Footer } from "./components/Footer";
+import { ValuePreview } from "./components/ValuePreview";
+import { ClosingCTA } from "./components/ClosingCTA";
+import { CoreBenefits } from "./components/CoreBenefits";
+import { HowItWorks } from "./components/HowItWorks";
+import { SocialProof } from "./components/SocialProof";
 
-type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated';
+type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated' | 'upload' | 'home';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
+  const [isUserAuthenticated, setIsUserAuthenticated] = useState<boolean>(false);
 
   // Check authentication status only on initial app load
   useEffect(() => {
@@ -32,12 +38,15 @@ export default function App() {
       const data = await response.json();
       
       if (data.authenticated) {
+        setIsUserAuthenticated(true);
         setAppState('authenticated');
       } else {
+        setIsUserAuthenticated(false);
         setAppState('guest');
       }
     } catch (error) {
       console.error('Auth check failed:', error);
+      setIsUserAuthenticated(false);
       setAppState('guest');
     }
   };
@@ -75,6 +84,7 @@ export default function App() {
       console.error('Failed to claim guest uploads:', error);
     }
     
+    setIsUserAuthenticated(true);
     setAppState('authenticated');
   };
 
@@ -103,6 +113,7 @@ export default function App() {
       console.error('Failed to claim guest uploads:', error);
     }
     
+    setIsUserAuthenticated(true);
     setAppState('authenticated');
   };
 
@@ -124,19 +135,34 @@ export default function App() {
       });
 
       if (response.ok) {
+        setIsUserAuthenticated(false);
         setAppState('guest');
       } else {
         console.error('Logout failed');
+        setIsUserAuthenticated(false);
         setAppState('guest');
       }
     } catch (error) {
       console.error('Logout error:', error);
+      setIsUserAuthenticated(false);
       setAppState('guest');
     }
   };
 
   const handleAuthRequired = () => {
     setAppState('auth-required');
+  };
+
+  const handleSeeMatches = () => {
+    setAppState('upload');
+  };
+
+  const handleGoHome = () => {
+    setAppState('home');
+  };
+
+  const handleGoDashboard = () => {
+    setAppState('authenticated');
   };
 
   const handleShowLogin = () => {
@@ -182,7 +208,7 @@ export default function App() {
   if (appState === 'login') {
     return (
       <div className="min-h-screen flex flex-col navy-gradient">
-        <Navbar isAuthenticated={false} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-md space-y-6">
             <div className="text-center">
@@ -204,7 +230,7 @@ export default function App() {
   if (appState === 'register') {
     return (
       <div className="min-h-screen flex flex-col navy-gradient">
-        <Navbar isAuthenticated={false} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
         <Register onRegister={handleRegister} onSwitchToLogin={handleSwitchToLogin} />
       </div>
     );
@@ -214,7 +240,7 @@ export default function App() {
   if (appState === 'auth-required') {
     return (
       <div className="min-h-screen flex flex-col navy-gradient">
-        <Navbar isAuthenticated={false} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center space-y-4 mb-8">
             <h2 className="text-2xl font-semibold text-white">
@@ -230,31 +256,74 @@ export default function App() {
     );
   }
 
-  // Guest state (not authenticated)
-  if (appState === 'guest') {
+  // Upload state (file upload page)
+  if (appState === 'upload') {
     return (
       <div className="min-h-screen flex flex-col navy-gradient">
-        <Navbar isAuthenticated={false} />
-        <div className="hero-spacing">
-          <HeroSection />
-        </div>
-        <div className="upload-spacing">
-          <FileUpload onAuthRequired={handleAuthRequired} onShowLogin={handleForceLogout} isAuthenticated={false} />
-        </div>
-        <div className="testimonial-spacing">
-          <TestimonialsSection />
-        </div>
-        <div className="footer-spacing footer-background">
-          <Footer />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-2xl">
+            <div className="text-center mb-8">
+              <button 
+                onClick={() => setAppState('guest')}
+                className="text-sm text-white back-to-upload-btn hover:text-primary transition-colors mb-4"
+              >
+                ← Back to home
+              </button>
+              <h2 className="text-2xl font-semibold text-white mb-4">
+                Upload Your Resume
+              </h2>
+              <p className="text-white/90">
+                Get personalized job matches based on your skills and experience
+              </p>
+            </div>
+            <FileUpload 
+              onAuthRequired={handleAuthRequired} 
+              onShowLogin={handleShowLogin}
+              isAuthenticated={false}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
+  // Home state (uses global authentication state)
+  if (appState === 'home') {
+    return (
+      <div className="min-h-screen bg-white">
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
+        <HeroSection onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
+        <ValuePreview />
+        <CoreBenefits />
+        <HowItWorks />
+        <SocialProof />
+        <ClosingCTA onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
+        <Footer />
+      </div>
+    );
+  }
+
+  // Guest state (not authenticated)
+  if (appState === 'guest') {
+      return (
+        <div className="min-h-screen bg-white">
+          <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
+          <HeroSection onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={false} />
+          <ValuePreview />
+          <CoreBenefits />
+          <HowItWorks />
+          <SocialProof />
+          <ClosingCTA onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={false} />
+          <Footer />
+        </div>
+      );
+  }
+
   // Authenticated state
   return (
     <div className="min-h-screen flex flex-col navy-gradient">
-      <Navbar isAuthenticated={true} onLogout={handleLogout} />
+      <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
       <Dashboard />
     </div>
   );
