@@ -5,6 +5,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\ResumeController;
+use App\Http\Controllers\JobProxyController;
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
@@ -48,4 +49,7 @@ Route::middleware('auth')->group(function () {
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
+
+// Job site proxy route
+Route::get('/proxy/job-site', [JobProxyController::class, 'proxyJobSite'])->name('proxy.job-site');
 

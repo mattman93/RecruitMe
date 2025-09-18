@@ -117,4 +117,40 @@ class Lead extends Model
         'estimated_publish_date' => 'datetime',
         'last_scraped_at' => 'datetime',
     ];
+
+    /**
+     * Get the job site structure for this lead's domain
+     */
+    public function jobSiteStructure()
+    {
+        $domain = $this->getDomain();
+        if (!$domain) {
+            return null;
+        }
+
+        return JobSiteStructure::where('domain', $domain)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    /**
+     * Extract domain from source URL
+     */
+    public function getDomain(): ?string
+    {
+        if (!$this->source_url) {
+            return null;
+        }
+
+        $parsed = parse_url($this->source_url);
+        return $parsed['host'] ?? null;
+    }
+
+    /**
+     * Check if this lead has auto-fill data available
+     */
+    public function hasAutoFillData(): bool
+    {
+        return $this->jobSiteStructure() !== null;
+    }
 }

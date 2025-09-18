@@ -226,20 +226,40 @@ class JobApplicationService
         $workExperience = $user->workExperience()->orderBy('start_date', 'desc')->get();
         $resume = $user->uploadedFiles()->where('file_type', 'resume')->latest()->first();
         
-        // Split name if no separate first/last name fields
-        $nameParts = explode(' ', $user->name, 2);
+        // Get parsed resume data for more accurate information
+        $parsedResume = $user->parsedResumes()->latest()->first();
+        
+        // Debug logging
+        Log::info('PrepareApplicationData Debug', [
+            'user_id' => $user->id,
+            'has_parsed_resume' => !!$parsedResume,
+            'parsed_resume_phone' => $parsedResume?->phone,
+            'user_phone' => $user->phone,
+            'parsed_resume_id' => $parsedResume?->id
+        ]);
+        
+        // Split name if no separate first/last name fields, prefer parsed resume data
+        $fullName = $parsedResume?->full_name ?? $user->name;
+        $nameParts = explode(' ', $fullName, 2);
         $firstName = $nameParts[0] ?? '';
         $lastName = $nameParts[1] ?? '';
+        
+        // Parse location into components
+        $locationComponents = $this->parseLocationString($parsedResume?->location ?? $user->location ?? '');
         
         $baseData = [
             'personal' => [
                 'first_name' => $firstName,
                 'last_name' => $lastName,
-                'full_name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone ?? null,
-                'linkedin_url' => $user->linkedin_url ?? null,
-                'portfolio_url' => $user->portfolio_url ?? null
+                'full_name' => $fullName,
+                'email' => $parsedResume?->email ?? $user->email,
+                'phone' => $parsedResume?->phone ?? $user->phone ?? null,
+                'linkedin_url' => $parsedResume?->linkedin_url ?? $user->linkedin_url ?? null,
+                'portfolio_url' => $parsedResume?->portfolio_url ?? $user->portfolio_url ?? null,
+                'address' => $locationComponents['address'] ?? '',
+                'city' => $locationComponents['city'] ?? '',
+                'state' => $locationComponents['state'] ?? '',
+                'zip' => $locationComponents['zip'] ?? ''
             ],
             'resume' => [
                 'file_path' => $resume?->file_path,
@@ -269,6 +289,89 @@ class JobApplicationService
         ];
         
         return $baseData;
+    }
+
+    /**
+     * Parse a location string into address components
+     */
+    private function parseLocationString(string $location): array
+    {
+        $components = [
+            'address' => '',
+            'city' => '',
+            'state' => '',
+            'zip' => ''
+        ];
+
+        if (empty($location)) {
+            return $components;
+        }
+
+        // Log the location being parsed for debugging
+        Log::info('Parsing location string', ['location' => $location]);
+
+        // Common patterns:
+        // "Williamstown NJ"
+        // "New York, NY"
+        // "123 Main St, Williamstown NJ 08094"
+        // "Williamstown, NJ 08094"
+
+        // Split by comma first
+        $parts = array_map('trim', explode(',', $location));
+        
+        if (count($parts) == 1) {
+            // No comma, likely "City State" or "City State Zip" format
+            $singlePart = trim($parts[0]);
+            
+            // Look for zip code (5 digits or 5+4 format)
+            if (preg_match('/\b(\d{5}(?:-\d{4})?)\b/', $singlePart, $zipMatches)) {
+                $components['zip'] = $zipMatches[1];
+                $singlePart = trim(str_replace($zipMatches[1], '', $singlePart));
+            }
+            
+            // Look for state (2-letter code at the end)
+            if (preg_match('/\b([A-Z]{2})\s*$/', $singlePart, $stateMatches)) {
+                $components['state'] = $stateMatches[1];
+                $singlePart = trim(str_replace($stateMatches[1], '', $singlePart));
+            }
+            
+            // Remaining is likely the city
+            if (!empty($singlePart)) {
+                $components['city'] = $singlePart;
+            }
+            
+        } else {
+            // Has comma(s), parse differently
+            $lastPart = trim(array_pop($parts));
+            
+            // Check if last part has state and/or zip
+            if (preg_match('/^([A-Z]{2})\s*(\d{5}(?:-\d{4})?)?\s*$/', $lastPart, $matches)) {
+                $components['state'] = $matches[1];
+                if (!empty($matches[2])) {
+                    $components['zip'] = $matches[2];
+                }
+            } else if (preg_match('/\b(\d{5}(?:-\d{4})?)\b/', $lastPart, $zipMatches)) {
+                $components['zip'] = $zipMatches[1];
+                $remaining = trim(str_replace($zipMatches[1], '', $lastPart));
+                if (preg_match('/\b([A-Z]{2})\b/', $remaining, $stateMatches)) {
+                    $components['state'] = $stateMatches[1];
+                }
+            }
+            
+            // If we have more parts, assume the last remaining is city
+            if (!empty($parts)) {
+                $components['city'] = trim(array_pop($parts));
+            }
+            
+            // Any remaining parts are likely address
+            if (!empty($parts)) {
+                $components['address'] = implode(', ', $parts);
+            }
+        }
+
+        Log::info('Parsed location components', $components);
+        
+        return $components;
     }
     
     /**

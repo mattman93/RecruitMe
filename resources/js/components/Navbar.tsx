@@ -49,8 +49,8 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
               
               <Button 
                 onClick={onLogout}
-                variant="outline"
-                className="text-[#4A4A4A] hover:text-[#1A1A1A] border-[#E6E9ED] hover:bg-[#F5F8FF]"
+                variant="default"
+                className="logout-button"
               >
                 Logout
               </Button>

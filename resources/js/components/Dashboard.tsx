@@ -157,8 +157,8 @@ const fetchWorkExperience = async () => {
         <div className="max-w-6xl mx-auto space-y-8">
           {/* Header */}
           <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold text-white">Welcome to Your Job Dashboard</h1>
-            <p className="text-white/90">
+            <h1 className="text-3xl font-bold text-[#1A1A1A]">Welcome to Your Job Dashboard</h1>
+            <p className="text-[#4A4A4A]">
               Your resume is ready. Let's find you the perfect job opportunities.
             </p>
           </div>
@@ -168,7 +168,7 @@ const fetchWorkExperience = async () => {
             {/* Left Column - Resume Preview */}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold text-white">Your Resume</h2>
+                <h2 className="text-2xl font-semibold text-[#1A1A1A]">Your Resume</h2>
                 <Badge variant="outline" className="flex items-center gap-2 bg-primary border-primary text-primary-foreground">
                   <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
                   Ready

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\UploadedFile;
+use App\Services\JobApplicationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -112,5 +113,53 @@ class UserController extends Controller
         return response()->json([
             'work_experience' => $workExperience,
         ]);
+    }
+
+    public function getApplicationFormData(Request $request)
+    {
+        $user = $request->user();
+        $applicationService = new JobApplicationService();
+        
+        // Create a mock lead for data preparation (we just need user data)
+        $mockLead = new \App\Models\Lead();
+        
+        try {
+            $formData = $applicationService->prepareApplicationData($user, $mockLead);
+            
+            // Transform to frontend format
+            $frontendData = [
+                'firstName' => $formData['personal']['first_name'] ?? '',
+                'lastName' => $formData['personal']['last_name'] ?? '',
+                'email' => $formData['personal']['email'] ?? '',
+                'phone' => $formData['personal']['phone'] ?? '',
+                'linkedinUrl' => $formData['personal']['linkedin_url'] ?? '',
+                'portfolioUrl' => $formData['personal']['portfolio_url'] ?? '',
+                'currentLocation' => $formData['location']['current_location'] ?? '',
+                'address' => $formData['personal']['address'] ?? '',
+                'city' => $formData['personal']['city'] ?? '',
+                'state' => $formData['personal']['state'] ?? '',
+                'zip' => $formData['personal']['zip'] ?? '',
+                'experience' => collect($formData['experience'])->map(function ($exp) {
+                    return [
+                        'company' => $exp['company'] ?? '',
+                        'position' => $exp['position'] ?? '',
+                        'startDate' => $exp['start_date'] ?? '',
+                        'endDate' => $exp['end_date'] ?? '',
+                        'isCurrent' => $exp['is_current'] ?? false,
+                    ];
+                })->toArray()
+            ];
+            
+            return response()->json([
+                'success' => true,
+                'formData' => $frontendData
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to prepare application data: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

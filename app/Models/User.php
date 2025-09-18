@@ -55,4 +55,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserWork::class)->orderBy('start_date', 'desc');
     }
+
+    public function parsedResumes()
+    {
+        return $this->hasMany(ParsedResume::class)->orderBy('parsed_at', 'desc');
+    }
 }

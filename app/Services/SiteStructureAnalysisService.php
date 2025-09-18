@@ -113,7 +113,8 @@ class SiteStructureAnalysisService
                 'Workday' => ['workday', 'wd-template'],
                 'Greenhouse' => ['greenhouse', 'grnhse'],
                 'Lever' => ['lever.co', 'lever-framework'],
-                'BambooHR' => ['bamboohr', 'bamboo-hr']
+                'BambooHR' => ['bamboohr', 'bamboo-hr'],
+                'Resumator' => ['resumator', 'theresumator', 'resumator-application-form', 'resumator-firstname']
             ];
             
             foreach ($indicators as $platform => $patterns) {
@@ -513,15 +514,25 @@ JAVASCRIPT;
             $placeholder = strtolower($input['placeholder'] ?? '');
             $type = $input['type'] ?? 'text';
             
-            // Name fields
-            if (strpos($name, 'name') !== false || strpos($placeholder, 'name') !== false) {
-                if (strpos($name, 'first') !== false || strpos($placeholder, 'first') !== false) {
-                    $fieldMappings['first_name'] = $this->createFieldMapping($input, 'personal.first_name');
-                } elseif (strpos($name, 'last') !== false || strpos($placeholder, 'last') !== false) {
-                    $fieldMappings['last_name'] = $this->createFieldMapping($input, 'personal.last_name');
-                } else {
-                    $fieldMappings['full_name'] = $this->createFieldMapping($input, 'personal.full_name');
-                }
+            // Name fields - improved detection for various platforms
+            $isFirstName = strpos($name, 'first') !== false || strpos($placeholder, 'first') !== false ||
+                          strpos($name, 'firstname') !== false || strpos($placeholder, 'firstname') !== false ||
+                          strpos($name, 'given') !== false || strpos($placeholder, 'given') !== false;
+            
+            $isLastName = strpos($name, 'last') !== false || strpos($placeholder, 'last') !== false ||
+                         strpos($name, 'lastname') !== false || strpos($placeholder, 'lastname') !== false ||
+                         strpos($name, 'family') !== false || strpos($placeholder, 'family') !== false ||
+                         strpos($name, 'surname') !== false || strpos($placeholder, 'surname') !== false;
+            
+            $isFullName = (strpos($name, 'name') !== false || strpos($placeholder, 'name') !== false) &&
+                         !$isFirstName && !$isLastName;
+            
+            if ($isFirstName) {
+                $fieldMappings['first_name'] = $this->createFieldMapping($input, 'personal.first_name');
+            } elseif ($isLastName) {
+                $fieldMappings['last_name'] = $this->createFieldMapping($input, 'personal.last_name');
+            } elseif ($isFullName) {
+                $fieldMappings['full_name'] = $this->createFieldMapping($input, 'personal.full_name');
             }
             
             // Email

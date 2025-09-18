@@ -324,6 +324,19 @@ body {
 }
 
 /* Button Glow Effects */
+
+/* Logout Button Override */
+.logout-button {
+  color: white !important;
+  background-color: #4b38f1 !important;
+  border-color: #4b38f1 !important;
+}
+
+.logout-button:hover {
+  color: white !important;
+  background-color: #3b2ad1 !important;
+  border-color: #3b2ad1 !important;
+}
 .btn-glow {
   transition: all 0.3s ease;
   position: relative;
