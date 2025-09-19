@@ -7,6 +7,7 @@ import { FilePreview } from "./FilePreview";
 import { JobQueue } from "./JobQueue";
 import { Footer } from "./Footer";
 import WorkExperience from "./WorkExperience";
+import { useScrollAnimation } from "./hooks/useScrollAnimation";
 
 interface UploadedResume {
   id: number;
@@ -30,6 +31,7 @@ interface WorkExperienceItem {
 }
 
 export function Dashboard() {
+  const { ref, isVisible } = useScrollAnimation(0.2);
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
   const [workExperience, setWorkExperience] = useState<WorkExperienceItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -152,11 +154,11 @@ const fetchWorkExperience = async () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div ref={ref} className="flex flex-col min-h-screen">
       <div className="flex-1 p-8">
         <div className="max-w-6xl mx-auto space-y-8">
           {/* Header */}
-          <div className="text-center space-y-2">
+          <div className={`text-center space-y-2 fade-in ${isVisible ? 'visible' : ''}`}>
             <h1 className="text-3xl font-bold text-[#1A1A1A]">Welcome to Your Job Dashboard</h1>
             <p className="text-[#4A4A4A]">
               Your resume is ready. Let's find you the perfect job opportunities.
@@ -164,7 +166,7 @@ const fetchWorkExperience = async () => {
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in fade-in-delay-1 ${isVisible ? 'visible' : ''}`}>
             {/* Left Column - Resume Preview */}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -246,7 +248,7 @@ const fetchWorkExperience = async () => {
             </div>
 
             {/* Right Column - Job Queue */}
-            <div>
+            <div className={`fade-in fade-in-delay-2 ${isVisible ? 'visible' : ''}`}>
               <JobQueue />
             </div>
           </div>

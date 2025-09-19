@@ -922,6 +922,10 @@
     height: calc(var(--spacing) * 16);
   }
 
+  .h-20 {
+    height: calc(var(--spacing) * 20);
+  }
+
   .h-32 {
     height: calc(var(--spacing) * 32);
   }
@@ -1916,6 +1920,10 @@
 
   .p-6 {
     padding: calc(var(--spacing) * 6);
+  }
+
+  .p-7 {
+    padding: calc(var(--spacing) * 7);
   }
 
   .p-8 {
@@ -4797,6 +4805,9 @@ body {
   box-shadow: 0 6px 20px #2d5bff66;
 }
 
+.navy-gradient {
+  background: linear-gradient(135deg, var(--navy) 0%, #2a3b4d 50%, #1a2632 100%);
+}
 
 .btn-primary {
   background-color: var(--primary-blue);

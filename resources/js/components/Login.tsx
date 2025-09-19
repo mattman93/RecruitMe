@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card } from "./ui/card";
 import { Separator } from "./ui/separator";
+import { useScrollAnimation } from "./hooks/useScrollAnimation";
 
 interface LoginProps {
   onLogin: () => void;
@@ -12,6 +13,7 @@ interface LoginProps {
 }
 
 export function Login({ onLogin, onSwitchToRegister }: LoginProps) {
+  const { ref, isVisible } = useScrollAnimation(0.3);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -68,13 +70,13 @@ console.log(token);
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
+    <div ref={ref} className={`flex-1 flex items-center justify-center p-8 fade-in ${isVisible ? 'visible' : ''}`}>
       <div className="w-full max-w-md">
         {/* Login Card */}
-        <Card className="p-8 shadow-xl border-0 bg-card/95 backdrop-blur-sm">
+        <Card className={`p-8 shadow-xl border-0 bg-card/95 backdrop-blur-sm fade-in fade-in-delay-1 ${isVisible ? 'visible' : ''}`}>
           <div className="space-y-6">
             {/* Header */}
-            <div className="text-center space-y-2">
+            <div className={`text-center space-y-2 fade-in fade-in-delay-2 ${isVisible ? 'visible' : ''}`}>
               <h1 className="text-2xl font-bold login-heading-text">Welcome Back</h1>
               <p className="login-text">
                 Sign in to your account to continue
@@ -89,7 +91,7 @@ console.log(token);
             )}
 
             {/* Social Login Buttons */}
-            <div className="space-y-3">
+            <div className={`space-y-3 fade-in fade-in-delay-3 ${isVisible ? 'visible' : ''}`}>
               <Button
                 type="button"
                 variant="outline"

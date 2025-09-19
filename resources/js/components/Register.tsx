@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card } from "./ui/card";
 import { Separator } from "./ui/separator";
+import { useScrollAnimation } from "./hooks/useScrollAnimation";
 
 interface RegisterProps {
   onRegister: () => void;
@@ -12,6 +13,7 @@ interface RegisterProps {
 }
 
 export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
+  const { ref, isVisible } = useScrollAnimation(0.3);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -128,13 +130,13 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
+    <div ref={ref} className={`flex-1 flex items-center justify-center p-8 fade-in ${isVisible ? 'visible' : ''}`}>
       <div className="w-full max-w-md">
         {/* Registration Card */}
-        <Card className="p-8 shadow-xl border-0 bg-card/95 backdrop-blur-sm">
+        <Card className={`p-8 shadow-xl border-0 bg-card/95 backdrop-blur-sm fade-in fade-in-delay-1 ${isVisible ? 'visible' : ''}`}>
           <div className="space-y-6">
             {/* Header */}
-            <div className="text-center space-y-2">
+            <div className={`text-center space-y-2 fade-in fade-in-delay-2 ${isVisible ? 'visible' : ''}`}>
               <h1 className="text-2xl font-bold register-heading-text">Create Account</h1>
               <p className="register-text">
                 Join thousands of job seekers finding their dream careers
@@ -149,7 +151,7 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
             )}
 
             {/* Social Registration Buttons */}
-            <div className="space-y-3">
+            <div className={`space-y-3 fade-in fade-in-delay-3 ${isVisible ? 'visible' : ''}`}>
               <Button
                 type="button"
                 variant="outline"

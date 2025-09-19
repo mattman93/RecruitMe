@@ -1,5 +1,8 @@
 import { Upload, Eye, Send } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { ResumeUploadAnimation } from "./ResumeUploadAnimation";
+import { JobReviewAnimation } from "./JobReviewAnimation";
+import { JobApplicationAnimation } from "./JobApplicationAnimation";
 import { useScrollAnimation } from "./hooks/useScrollAnimation";
 
 export function HowItWorks() {
@@ -10,19 +13,25 @@ export function HowItWorks() {
       icon: Upload,
       title: "Upload your resume",
       description: "Quick and secure upload process",
-      image: "https://images.unsplash.com/photo-1554224155-cfa08c2a758f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyZXN1bWUlMjBkb2N1bWVudCUyMHVwbG9hZHxlbnwxfHx8fDE3NTgxMjE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+      image: "https://images.unsplash.com/photo-1554224155-cfa08c2a758f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyZXN1bWUlMjBkb2N1bWVudCUyMHVwbG9hZHxlbnwxfHx8fDE3NTgxMjE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
+      isAnimated: true,
+      animationType: "upload"
     },
     {
       icon: Eye,
       title: "Review matches",
       description: "See personalized job recommendations",
-      image: "https://images.unsplash.com/photo-1575388902449-6bca946ad549?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2UlMjBjbGVhbnxlbnwxfHx8fDE3NTgxMjE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+      image: "https://images.unsplash.com/photo-1575388902449-6bca946ad549?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2UlMjBjbGVhbnxlbnwxfHx8fDE3NTgxMjE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
+      isAnimated: true,
+      animationType: "review"
     },
     {
       icon: Send,
       title: "Apply with confidence",
       description: "One-click applications that work",
-      image: "https://images.unsplash.com/photo-1575388902449-6bca946ad549?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2UlMjBjbGVhbnxlbnwxfHx8fDE3NTgxMjE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+      image: "https://images.unsplash.com/photo-1575388902449-6bca946ad549?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkYXNoYm9hcmQlMjBpbnRlcmZhY2UlMjBjbGVhbnxlbnwxfHx8fDE3NTgxMjE2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
+      isAnimated: true,
+      animationType: "apply"
     }
   ];
 
@@ -65,12 +74,22 @@ export function HowItWorks() {
 
                 {/* Visual */}
                 <div className={`${isEven ? '' : 'lg:col-start-1 lg:row-start-1'}`}>
-                  <div className="bg-[#F7F8FA] rounded-2xl p-6">
-                    <ImageWithFallback
-                      src={step.image}
-                      alt={`Step ${index + 1} illustration`}
-                      className="w-full h-48 object-cover rounded-xl"
-                    />
+                  <div className="bg-[#F7F8FA] rounded-2xl p-6 flex items-center justify-center min-h-[300px]">
+                    {step.isAnimated ? (
+                      step.animationType === "upload" ? (
+                        <ResumeUploadAnimation />
+                      ) : step.animationType === "review" ? (
+                        <JobReviewAnimation />
+                      ) : step.animationType === "apply" ? (
+                        <JobApplicationAnimation />
+                      ) : null
+                    ) : (
+                      <ImageWithFallback
+                        src={step.image}
+                        alt={`Step ${index + 1} illustration`}
+                        className="w-full h-48 object-cover rounded-xl"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
