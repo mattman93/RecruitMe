@@ -36,11 +36,17 @@ export function JobQueueAnimation() {
   ];
 
   useEffect(() => {
+    // Only start animation when component is visible
+    if (!isVisible) return;
+
     const runAnimationSequence = async () => {
       // Reset animation state
       setVisibleJobs([]);
       setCurrentJobIndex(0);
       setAnimationComplete(false);
+
+      // Add a small delay before starting
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Add jobs one by one
       for (let i = 0; i < jobs.length; i++) {
@@ -55,11 +61,9 @@ export function JobQueueAnimation() {
       setAnimationComplete(true);
     };
 
-    // Run initial animation only once
+    // Run animation only when component becomes visible
     runAnimationSequence();
-
-    // Remove the repeating interval
-  }, [jobs.length]);
+  }, [isVisible, jobs.length]);
 
   return (
     <div ref={ref} className={`bg-white rounded-2xl shadow-lg border border-[#E6E9ED] p-7 max-w-4xl mx-auto mb-6 fade-in ${isVisible ? 'visible' : ''}`}>
