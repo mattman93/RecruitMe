@@ -195,7 +195,7 @@ export default function App() {
   // Loading state
   if (appState === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center navy-gradient">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="flex items-center space-x-2">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
           <span className="text-primary">Loading...</span>
@@ -207,7 +207,7 @@ export default function App() {
   // Login state (from guest page)
   if (appState === 'login') {
     return (
-      <div className="min-h-screen flex flex-col navy-gradient">
+      <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-md space-y-6">
@@ -229,7 +229,7 @@ export default function App() {
   // Register state
   if (appState === 'register') {
     return (
-      <div className="min-h-screen flex flex-col navy-gradient">
+      <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
         <Register onRegister={handleRegister} onSwitchToLogin={handleSwitchToLogin} />
       </div>
@@ -239,7 +239,7 @@ export default function App() {
   // Login required state (after file upload)
   if (appState === 'auth-required') {
     return (
-      <div className="min-h-screen flex flex-col navy-gradient">
+      <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center space-y-4 mb-8">
@@ -259,21 +259,22 @@ export default function App() {
   // Upload state (file upload page)
   if (appState === 'upload') {
     return (
-      <div className="min-h-screen flex flex-col navy-gradient">
+      <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-2xl">
             <div className="text-center mb-8">
               <button 
                 onClick={() => setAppState('guest')}
-                className="text-sm text-white back-to-upload-btn hover:text-primary transition-colors mb-4"
+                className="text-sm back-to-upload-btn hover:text-primary transition-colors mb-4"
+                style={{ color: '#4b38f1' }}
               >
                 ← Back to home
               </button>
-              <h2 className="text-2xl font-semibold text-white mb-4">
+              <h2 className="text-2xl font-semibold mb-4" style={{ color: '#1A1A1A' }}>
                 Upload Your Resume
               </h2>
-              <p className="text-white/90">
+              <p style={{ color: '#4A4A4A' }}>
                 Get personalized job matches based on your skills and experience
               </p>
             </div>
@@ -322,7 +323,7 @@ export default function App() {
 
   // Authenticated state
   return (
-    <div className="min-h-screen flex flex-col navy-gradient">
+    <div className="min-h-screen flex flex-col bg-white">
       <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
       <Dashboard />
     </div>
