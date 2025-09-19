@@ -870,6 +870,14 @@
     height: 100%;
   }
 
+  .h-0\.5 {
+    height: calc(var(--spacing) * 0.5);
+  }
+
+  .h-1 {
+    height: calc(var(--spacing) * 1);
+  }
+
   .h-1\.5 {
     height: calc(var(--spacing) * 1.5);
   }
@@ -880,6 +888,10 @@
 
   .h-2\.5 {
     height: calc(var(--spacing) * 2.5);
+  }
+
+  .h-3 {
+    height: calc(var(--spacing) * 3);
   }
 
   .h-4 {
@@ -926,6 +938,10 @@
     height: calc(var(--spacing) * 20);
   }
 
+  .h-28 {
+    height: calc(var(--spacing) * 28);
+  }
+
   .h-32 {
     height: calc(var(--spacing) * 32);
   }
@@ -936,6 +952,14 @@
 
   .h-80 {
     height: calc(var(--spacing) * 80);
+  }
+
+  .h-96 {
+    height: calc(var(--spacing) * 96);
+  }
+
+  .h-24 {
+    height: calc(var(--spacing) * 24);
   }
 
   .h-\[1\.15rem\] {
@@ -956,6 +980,10 @@
 
   .h-\[var\(--radix-select-trigger-height\)\] {
     height: var(--radix-select-trigger-height);
+  }
+
+  .h-\[480px\] {
+    height: 480px;
   }
 
   .h-auto {
@@ -4155,6 +4183,12 @@
     }
   }
 
+  @media (width >= 64rem) {
+    .lg\:ml-\[25\%\] {
+      margin-left: 25%;
+    }
+  }
+
   .dark\:border-input:is(.dark *) {
     border-color: var(--input);
   }
@@ -5337,4 +5371,22 @@ body {
   20%, 50% {
     opacity: 0;
   }
+}
+
+/* Dashboard specific styles */
+.dashboard-card-text {
+  color: var(--color-black);
+}
+
+/* Login specific styles */
+.login-heading-text {
+  color: var(--color-black);
+}
+
+.login-text {
+  color: var(--color-black);
+}
+
+.signup-link-btn {
+  color: #2D5BFF;
 }

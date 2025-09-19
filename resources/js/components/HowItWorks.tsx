@@ -52,7 +52,7 @@ export function HowItWorks() {
             return (
               <div key={index} className={`grid lg:grid-cols-2 gap-12 items-center ${isEven ? '' : 'lg:grid-flow-col-dense'} fade-in fade-in-delay-${index + 1} ${isVisible ? 'visible' : ''}`}>
                 {/* Content */}
-                <div className={`${isEven ? '' : 'lg:col-start-2'}`}>
+                <div className={`${isEven ? '' : 'lg:col-start-2'} ${index === 1 ? 'lg:ml-[25%]' : ''}`}>
                   <div className="flex items-center gap-4 mb-6">
                     <div className="w-12 h-12 bg-[#2D5BFF] rounded-xl flex items-center justify-center">
                       <IconComponent className="w-6 h-6 text-white" />

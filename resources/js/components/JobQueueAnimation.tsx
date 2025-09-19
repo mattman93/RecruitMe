@@ -86,7 +86,7 @@ export function JobQueueAnimation() {
           
           {/* Resume mockup */}
           <div className="bg-[#F7F8FA] rounded-xl p-4 mb-6">
-            <div className="w-24 h-32 bg-white border-2 border-[#E6E9ED] rounded-lg p-2 mb-4">
+            <div className="w-20 h-28 bg-white border border-[#E6E9ED] rounded-sm p-2 mb-4">
               <div className="space-y-1">
                 <div className="h-1 bg-[#E6E9ED] rounded w-full"></div>
                 <div className="h-1 bg-[#E6E9ED] rounded w-3/4"></div>
@@ -133,7 +133,7 @@ export function JobQueueAnimation() {
         <div>
           <h3 className="text-xl font-semibold text-[#1A1A1A] mb-6">Job Queue</h3>
           
-          <div className="min-h-[480px]">
+          <div className="h-[480px] overflow-hidden">
             <div className="space-y-4">
               <AnimatePresence>
                 {visibleJobs.map((jobId, index) => {

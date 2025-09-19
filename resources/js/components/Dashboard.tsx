@@ -158,7 +158,7 @@ const fetchWorkExperience = async () => {
       <div className="flex-1 p-8">
         <div className="max-w-6xl mx-auto space-y-8">
           {/* Header */}
-          <div className={`text-center space-y-2 fade-in ${isVisible ? 'visible' : ''}`}>
+          <div className="text-center space-y-2 fade-in visible">
             <h1 className="text-3xl font-bold text-[#1A1A1A]">Welcome to Your Job Dashboard</h1>
             <p className="text-[#4A4A4A]">
               Your resume is ready. Let's find you the perfect job opportunities.
@@ -166,7 +166,7 @@ const fetchWorkExperience = async () => {
           </div>
 
           {/* Main Content Grid */}
-          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in fade-in-delay-1 ${isVisible ? 'visible' : ''}`}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in fade-in-delay-1 visible">
             {/* Left Column - Resume Preview */}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -248,7 +248,7 @@ const fetchWorkExperience = async () => {
             </div>
 
             {/* Right Column - Job Queue */}
-            <div className={`fade-in fade-in-delay-2 ${isVisible ? 'visible' : ''}`}>
+            <div className="fade-in fade-in-delay-2 visible">
               <JobQueue />
             </div>
           </div>

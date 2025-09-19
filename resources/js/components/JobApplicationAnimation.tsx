@@ -55,7 +55,7 @@ export function JobApplicationAnimation() {
   const isComplete = animationPhase === 'complete';
 
   return (
-    <div className="w-full max-w-md mx-auto pointer-events-none h-96 pb-4"> {/* Increased height and added bottom padding */}
+    <div className="w-full max-w-md mx-auto pointer-events-none h-96 overflow-hidden"> {/* Fixed height with overflow hidden to prevent layout shifts */}
       {/* Header */}
       <div className="text-center mb-8">
         <h3 className="text-xl font-semibold text-[#1A1A1A] mb-2">Apply with Confidence</h3>
