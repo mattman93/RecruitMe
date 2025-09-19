@@ -2042,6 +2042,18 @@
     padding-block: calc(var(--spacing) * 32);
   }
 
+  .py-40 {
+    padding-block: calc(var(--spacing) * 40);
+  }
+
+  .pb-40 {
+    padding-bottom: calc(var(--spacing) * 40);
+  }
+
+  .pb-48 {
+    padding-bottom: calc(var(--spacing) * 48);
+  }
+
   .pt-0 {
     padding-top: calc(var(--spacing) * 0);
   }
@@ -2064,6 +2076,14 @@
 
   .pt-8 {
     padding-top: calc(var(--spacing) * 8);
+  }
+
+  .pt-32 {
+    padding-top: calc(var(--spacing) * 32);
+  }
+
+  .pt-40 {
+    padding-top: calc(var(--spacing) * 40);
   }
 
   .pr-2 {
@@ -4180,6 +4200,18 @@
   @media (width >= 64rem) {
     .lg\:py-40 {
       padding-block: calc(var(--spacing) * 40);
+    }
+  }
+
+  @media (width >= 64rem) {
+    .lg\:pt-40 {
+      padding-top: calc(var(--spacing) * 40);
+    }
+  }
+
+  @media (width >= 64rem) {
+    .lg\:pb-48 {
+      padding-bottom: calc(var(--spacing) * 48);
     }
   }
 
