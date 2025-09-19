@@ -16,7 +16,7 @@ export function HeroSection({ onSeeMatches, onDashboard, isAuthenticated }: Hero
         className="parallax-bg absolute inset-0 hero-gradient"
         style={{ transform: `translateY(${offsetY * 0.5}px)` }}
       />
-      <div className="max-w-4xl mx-auto px-6 py-32 lg:py-40 text-center relative z-10">
+      <div className="max-w-4xl mx-auto px-6 pt-32 lg:pt-40 pb-40 lg:pb-48 text-center relative z-10">
         <div className="mb-8">
           <img 
             src="/images/af-main.png" 
