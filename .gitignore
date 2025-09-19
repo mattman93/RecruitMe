@@ -25,3 +25,7 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+cookies.txt
+sample_resume.txt
+test_resume_parsing.php
+/tests-examples
