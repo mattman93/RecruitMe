@@ -1,0 +1,388 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&display=swap');
+
+@custom-variant dark (&:is(.dark *));
+
+
+:root {
+  --font-size: 16px;
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --font-family-heading: 'Archivo', 'Inter', system-ui, -apple-system, sans-serif;
+  
+  /* New Notion-inspired Color Palette */
+  --white: #FFFFFF;
+  --soft-gray: #F7F8FA;
+  --light-border: #E6E9ED;
+  --primary-text: #1A1A1A;
+  --secondary-text: #4A4A4A;
+  --tertiary-text: #7A7A7A;
+  --primary-blue: #2D5BFF;
+  --blue-hover: #F5F8FF;
+  --warm-accent: #FFB800;
+  --success-green: #28A745;
+  --error-red: #DC3545;
+  --warning-yellow: #FFC107;
+  
+  /* Design System Variables */
+  --background: var(--white);
+  --foreground: var(--primary-text);
+  --card: var(--white);
+  --card-foreground: var(--primary-text);
+  --popover: var(--white);
+  --popover-foreground: var(--primary-text);
+  --primary: var(--primary-blue);
+  --primary-foreground: var(--white);
+  --secondary: var(--soft-gray);
+  --secondary-foreground: var(--primary-text);
+  --muted: var(--soft-gray);
+  --muted-foreground: var(--secondary-text);
+  --accent: var(--primary-blue);
+  --accent-foreground: var(--white);
+  --destructive: var(--error-red);
+  --destructive-foreground: var(--white);
+  --border: var(--light-border);
+  --input: transparent;
+  --input-background: var(--white);
+  --switch-background: var(--soft-gray);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: var(--primary-blue);
+  --chart-1: var(--primary-blue);
+  --chart-2: var(--warm-accent);
+  --chart-3: var(--success-green);
+  --chart-4: var(--error-red);
+  --chart-5: var(--secondary-text);
+  --radius: 0.5rem;
+  --sidebar: var(--white);
+  --sidebar-foreground: var(--primary-text);
+  --sidebar-primary: var(--primary-blue);
+  --sidebar-primary-foreground: var(--white);
+  --sidebar-accent: var(--soft-gray);
+  --sidebar-accent-foreground: var(--primary-text);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary-blue);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-family: var(--font-family-heading);
+      font-size: 3.5rem;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      font-family: var(--font-family-heading);
+      font-size: 2.5rem;
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-family: var(--font-family-heading);
+      font-size: 1.5rem;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    h4 {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.125rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    p {
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 1.6;
+      color: var(--secondary-text);
+    }
+
+    label {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      line-height: 1.5;
+      color: var(--secondary-text);
+    }
+
+    button {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    input {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 400;
+      line-height: 1.5;
+    }
+
+    .mono {
+      font-family: var(--font-family-mono);
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+  font-family: var(--font-family);
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--white);
+  color: var(--primary-text);
+}
+
+/* Hero Section Gradient - Tinkerwell inspired */
+.hero-gradient {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 25%, #a855f7 50%, #c084fc 75%, #2563eb 100%);
+  position: relative;
+}
+
+.hero-gradient::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: linear-gradient(to bottom, transparent 0%, var(--white) 100%);
+  pointer-events: none;
+}
+
+/* Light gradient background for sections */
+.light-gradient {
+  background: linear-gradient(135deg, var(--white) 0%, var(--soft-gray) 100%);
+}
+
+/* Pill button gradient */
+.gradient-pill {
+  background: linear-gradient(135deg, var(--primary-blue) 0%, #4F46E5 100%);
+  box-shadow: 0 4px 14px 0 rgba(45, 91, 255, 0.3);
+}
+
+.gradient-pill:hover {
+  background: linear-gradient(135deg, #1E3FCC 0%, #3730A3 100%);
+  box-shadow: 0 6px 20px 0 rgba(45, 91, 255, 0.4);
+}
+
+/* Navy Background Gradient */
+.navy-gradient {
+  background: linear-gradient(135deg, var(--navy) 0%, #2A3B4D 50%, #1A2632 100%);
+}
+
+
+/* CTA Button Styles */
+.btn-primary {
+  background-color: var(--primary-blue);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #35C29A;
+}
+
+.btn-secondary-coral {
+  background-color: var(--coral);
+  color: white;
+}
+
+.btn-secondary-coral:hover {
+  background-color: #FF5252;
+}
+
+.btn-secondary-lavender {
+  background-color: var(--lavender);
+  color: white;
+}
+
+.btn-secondary-lavender:hover {
+  background-color: #8B7DFF;
+}
+
+/* Animation Classes */
+.fade-in {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.fade-in-delay-1 {
+  transition-delay: 0.1s;
+}
+
+.fade-in-delay-2 {
+  transition-delay: 0.2s;
+}
+
+.fade-in-delay-3 {
+  transition-delay: 0.3s;
+}
+
+/* Button Glow Effects */
+
+/* Logout Button Override */
+.logout-button {
+  color: white !important;
+  background-color: #4b38f1 !important;
+  border-color: #4b38f1 !important;
+}
+
+.logout-button:hover {
+  color: white !important;
+  background-color: #3b2ad1 !important;
+  border-color: #3b2ad1 !important;
+}
+.btn-glow {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.btn-glow:hover {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-glow-white {
+  transition: all 0.3s ease;
+}
+
+.btn-glow-white:hover {
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Parallax Hero Effect */
+.parallax-bg {
+  will-change: transform;
+  transition: transform 0.1s ease-out;
+}
+
+/* Typewriter Effect */
+.typewriter {
+  overflow: hidden;
+  border-right: 2px solid var(--primary-blue);
+  white-space: nowrap;
+  animation: typing 1.5s steps(40, end), blink-caret 0.75s step-end infinite;
+}
+
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+@keyframes blink-caret {
+  from, to { border-color: transparent }
+  50% { border-color: var(--primary-blue) }
+}
+
+.typewriter-complete {
+  border-right: none;
+}

@@ -1,0 +1,3404 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\JobApplication;
+use App\Models\JobSiteStructure;
+use App\Models\Lead;
+use App\Models\UserFormPreference;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
+use OpenAI\Laravel\Facades\OpenAI;
+use Carbon\Carbon;
+use Exception;
+
+class PlaywrightAutomationService
+{
+    protected string $playwrightPath;
+    protected string $screenshotPath;
+    
+    public function __construct()
+    {
+        // These paths would be configured based on your environment
+        $this->playwrightPath = '/usr/local/bin/playwright'; // Or wherever Playwright is installed
+        $this->screenshotPath = storage_path('app/storage/application_screenshots');
+        
+        // Ensure screenshot directory exists
+        if (!file_exists($this->screenshotPath)) {
+            mkdir($this->screenshotPath, 0755, true);
+        }
+    }
+    
+    /**
+     * Fill and submit application form completely
+     */
+    public function fillAndSubmitApplication(
+        Lead $lead, 
+        ?JobSiteStructure $siteStructure, 
+        array $formData, 
+        JobApplication $application
+    ): array {
+        // Check if we're in test mode
+        if (env('TEST_MODE', false)) {
+            return $this->simulateApplication($lead, $siteStructure, $formData, $application, 'full');
+        }
+        
+        $startTime = microtime(true);
+        
+        try {
+            // Get user preferences for learning (fallback to empty array if user_id is null)
+            $userPreferences = $lead->user_id ? $this->getUserPreferences($lead->user_id) : [];
+            
+            // Generate Playwright script for this specific site
+            $script = $this->generatePlaywrightScript([
+                'url' => $lead->source_url,
+                'site_structure' => $siteStructure,
+                'form_data' => $formData,
+                'user_preferences' => $userPreferences,
+                'user_id' => $lead->user_id,
+                'action' => 'fill_and_submit',
+                'application_id' => $application->id
+            ]);
+            
+            $result = $this->executePlaywrightScript($script);
+            $duration = microtime(true) - $startTime;
+            
+            if ($result['success']) {
+                return [
+                    'success' => true,
+                    'final_url' => $result['final_url'] ?? null,
+                    'confirmation_number' => $result['confirmation_number'] ?? null,
+                    'confirmation_message' => $result['confirmation_message'] ?? null,
+                    'duration' => round($duration),
+                    'screenshots' => $result['screenshots'] ?? []
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Unknown automation error',
+                    'duration' => round($duration),
+                    'screenshots' => $result['screenshots'] ?? []
+                ];
+            }
+            
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'duration' => round(microtime(true) - $startTime)
+            ];
+        }
+    }
+    
+    /**
+     * Fill form only, don't submit (for semi-automation)
+     */
+    public function fillFormOnly(
+        Lead $lead, 
+        ?JobSiteStructure $siteStructure, 
+        array $formData, 
+        JobApplication $application
+    ): array {
+        // Check if we're in test mode
+        if (env('TEST_MODE', false)) {
+            return $this->simulateApplication($lead, $siteStructure, $formData, $application, 'fill_only');
+        }
+        
+        try {
+            // Get user preferences for learning
+            $userPreferences = $this->getUserPreferences($lead->user_id);
+            
+            $script = $this->generatePlaywrightScript([
+                'url' => $lead->source_url,
+                'site_structure' => $siteStructure,
+                'form_data' => $formData,
+                'user_preferences' => $userPreferences,
+                'user_id' => $lead->user_id,
+                'action' => 'fill_only',
+                'application_id' => $application->id
+            ]);
+            
+            $result = $this->executePlaywrightScript($script);
+            
+            if ($result['success']) {
+                return [
+                    'success' => true,
+                    'final_url' => $result['final_url'] ?? null,
+                    'session_data' => [
+                        'browser_session_id' => $result['session_id'] ?? null,
+                        'filled_fields' => $result['filled_fields'] ?? []
+                    ],
+                    'screenshots' => $result['screenshots'] ?? []
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Failed to fill form',
+                    'screenshots' => $result['screenshots'] ?? []
+                ];
+            }
+            
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Generate Playwright JavaScript/Python script
+     */
+    /**
+     * Get user preferences for form auto-fill learning
+     */
+    protected function getUserPreferences(int $userId): array
+    {
+        $preferences = UserFormPreference::where('user_id', $userId)
+            ->orderBy('confidence_score', 'desc')
+            ->orderBy('use_count', 'desc')
+            ->get();
+            
+        $preferenceMap = [];
+        foreach ($preferences as $preference) {
+            $preferenceMap[$preference->field_identifier] = [
+                'id' => $preference->id,
+                'field_type' => $preference->field_type,
+                'question_text' => $preference->question_text,
+                'response_data' => $preference->response_data,
+                'confidence_score' => $preference->confidence_score,
+            ];
+        }
+        
+        return $preferenceMap;
+    }
+    
+    protected function generatePlaywrightScript(array $config): string
+    {
+        $siteStructure = $config['site_structure'];
+        $formData = $config['form_data'];
+        $userPreferences = $config['user_preferences'] ?? [];
+        $userId = $config['user_id'] ?? null;
+        $action = $config['action']; // 'fill_and_submit' or 'fill_only'
+        $applicationId = $config['application_id'];
+        
+        // Generate JavaScript script for Playwright
+        $script = $this->getPlaywrightScriptTemplate();
+        
+        // Replace placeholders with actual values
+        $replacements = [
+            '{{TARGET_URL}}' => $config['url'],
+            '{{ACTION_TYPE}}' => $action,
+            '{{APPLICATION_ID}}' => $applicationId,
+            '{{FORM_DATA}}' => json_encode($formData),
+            '{{SITE_STRUCTURE}}' => json_encode($siteStructure?->toArray() ?? []),
+            '{{USER_PREFERENCES}}' => json_encode($userPreferences),
+            '{{USER_ID}}' => $userId,
+            '{{SCREENSHOT_PATH}}' => $this->screenshotPath,
+            '{{USER_AGENT}}' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ];
+        
+        foreach ($replacements as $placeholder => $value) {
+            $script = str_replace($placeholder, $value, $script);
+        }
+        
+        return $script;
+    }
+    
+    /**
+     * Get the Playwright script template
+     */
+    protected function getPlaywrightScriptTemplate(): string
+    {
+        return <<<'JAVASCRIPT'
+const { firefox } = require('playwright');
+const fs = require('fs');
+
+async function automateApplication() {
+    const browser = await firefox.launch({ 
+        headless: true, // Firefox works better in headless mode
+        executablePath: '/var/www/html/browsers/firefox-1490/firefox/firefox',
+        args: [
+            '--no-sandbox',
+            '--memory-pressure-off',
+            '--max_old_space_size=256'
+        ]
+    });
+    
+    const context = await browser.newContext({
+        userAgent: '{{USER_AGENT}}',
+        viewport: { width: 1366, height: 768 }
+    });
+    
+    const page = await context.newPage();
+    
+    try {
+        console.log('Navigating to: {{TARGET_URL}}');
+        await page.goto('{{TARGET_URL}}', { waitUntil: 'networkidle' });
+        
+        // Take initial screenshot
+        await page.screenshot({ 
+            path: '{{SCREENSHOT_PATH}}/app_{{APPLICATION_ID}}_initial.png' 
+        });
+        
+        const formData = {{FORM_DATA}};
+        const siteStructure = {{SITE_STRUCTURE}};
+        const actionType = '{{ACTION_TYPE}}';
+        
+        // Look for and click "Apply" button to get to application form
+        const applyButtonSelectors = [
+            'button:has-text("Apply")',
+            'a:has-text("Apply")',
+            'button:has-text("Apply for this job")',
+            'input[value*="Apply"]',
+            '[data-testid*="apply"]',
+            '.apply-button',
+            '#apply-button'
+        ];
+        
+        let applyButtonFound = false;
+        for (const selector of applyButtonSelectors) {
+            try {
+                const element = await page.locator(selector).first();
+                if (await element.isVisible({ timeout: 2000 })) {
+                    console.log(`Found apply button: ${selector}`);
+                    await element.click();
+                    
+                    // Wait for page load with fallback strategy
+                    try {
+                        await page.waitForLoadState('networkidle', { timeout: 15000 });
+                    } catch (e) {
+                        console.log('Network idle timeout, using domcontentloaded fallback...');
+                        await page.waitForLoadState('domcontentloaded', { timeout: 8000 });
+                        await page.waitForTimeout(3000);
+                    }
+                    
+                    applyButtonFound = true;
+                    break;
+                }
+            } catch (e) {
+                // Continue to next selector
+            }
+        }
+        
+        if (!applyButtonFound) {
+            console.log('No apply button found, assuming we are already on application form');
+        }
+        
+        // Take screenshot after navigation
+        await page.screenshot({ 
+            path: '{{SCREENSHOT_PATH}}/app_{{APPLICATION_ID}}_form.png' 
+        });
+        
+        // Fill form fields
+        const filledFields = [];
+        
+        // Name fields
+        await fillFieldIfExists(page, ['input[name="firstName"]', '#firstName', 'input[placeholder*="First"]'], formData.personal.first_name, filledFields);
+        await fillFieldIfExists(page, ['input[name="lastName"]', '#lastName', 'input[placeholder*="Last"]'], formData.personal.last_name, filledFields);
+        await fillFieldIfExists(page, ['input[name="name"]', '#name', 'input[placeholder*="Full name"]'], formData.personal.full_name, filledFields);
+        
+        // Email
+        await fillFieldIfExists(page, ['input[name="email"]', '#email', 'input[type="email"]'], formData.personal.email, filledFields);
+        
+        // Phone
+        if (formData.personal.phone) {
+            await fillFieldIfExists(page, ['input[name="phone"]', '#phone', 'input[type="tel"]'], formData.personal.phone, filledFields);
+        }
+        
+        // Resume upload
+        if (formData.resume.file_path) {
+            const fileInputSelectors = ['input[type="file"]', 'input[name*="resume"]', 'input[accept*="pdf"]'];
+            for (const selector of fileInputSelectors) {
+                try {
+                    const fileInput = await page.locator(selector).first();
+                    if (await fileInput.isVisible({ timeout: 2000 })) {
+                        await fileInput.setInputFiles(formData.resume.file_path);
+                        filledFields.push(`File uploaded: ${selector}`);
+                        break;
+                    }
+                } catch (e) {
+                    // Continue
+                }
+            }
+        }
+        
+        // Work authorization questions
+        await handleYesNoQuestion(page, ['Do you have', 'authorized to work'], true, filledFields);
+        await handleYesNoQuestion(page, ['visa sponsorship', 'require sponsorship'], false, filledFields);
+        
+        // Location/Remote work preferences
+        const locationSelectors = ['input[name*="location"]', 'select[name*="location"]'];
+        if (formData.location.current_location) {
+            await fillFieldIfExists(page, locationSelectors, formData.location.current_location, filledFields);
+        }
+        
+        // Take screenshot after filling
+        await page.screenshot({ 
+            path: '{{SCREENSHOT_PATH}}/app_{{APPLICATION_ID}}_filled.png' 
+        });
+        
+        let result = {
+            success: true,
+            final_url: page.url(),
+            filled_fields: filledFields,
+            screenshots: [
+                `app_{{APPLICATION_ID}}_initial.png`,
+                `app_{{APPLICATION_ID}}_form.png`,
+                `app_{{APPLICATION_ID}}_filled.png`
+            ]
+        };
+        
+        // If we're doing full automation, try to submit
+        if (actionType === 'fill_and_submit') {
+            const submitButtonSelectors = [
+                'button:has-text("Submit")',
+                'input[type="submit"]',
+                'button[type="submit"]',
+                'button:has-text("Submit Application")',
+                'button:has-text("Apply")',
+                '[data-testid*="submit"]'
+            ];
+            
+            let submitButtonFound = false;
+            for (const selector of submitButtonSelectors) {
+                try {
+                    const element = await page.locator(selector).first();
+                    if (await element.isVisible({ timeout: 2000 })) {
+                        console.log(`Found submit button: ${selector}`);
+                        await element.click();
+                        
+                        // Wait for submission to complete with fallback strategy
+                        try {
+                            await page.waitForLoadState('networkidle', { timeout: 20000 });
+                        } catch (e) {
+                            console.log('Network idle timeout after submit, using domcontentloaded fallback...');
+                            await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+                            await page.waitForTimeout(5000);
+                        }
+                        
+                        // Take final screenshot
+                        await page.screenshot({ 
+                            path: '{{SCREENSHOT_PATH}}/app_{{APPLICATION_ID}}_submitted.png' 
+                        });
+                        result.screenshots.push(`app_{{APPLICATION_ID}}_submitted.png`);
+                        
+                        submitButtonFound = true;
+                        break;
+                    }
+                } catch (e) {
+                    // Continue
+                }
+            }
+            
+            if (!submitButtonFound) {
+                result.success = false;
+                result.error = 'Could not find submit button';
+            } else {
+                // Try to extract confirmation message
+                try {
+                    const confirmationSelectors = [
+                        ':has-text("Thank you")',
+                        ':has-text("Application submitted")',
+                        ':has-text("Successfully")',
+                        '.confirmation',
+                        '.success'
+                    ];
+                    
+                    for (const selector of confirmationSelectors) {
+                        try {
+                            const element = await page.locator(selector).first();
+                            if (await element.isVisible({ timeout: 5000 })) {
+                                result.confirmation_message = await element.textContent();
+                                break;
+                            }
+                        } catch (e) {
+                            // Continue
+                        }
+                    }
+                } catch (e) {
+                    console.log('Could not extract confirmation message');
+                }
+            }
+        }
+        
+        console.log(JSON.stringify(result));
+        return result;
+        
+    } catch (error) {
+        console.error('Automation error:', error);
+        await page.screenshot({ 
+            path: '{{SCREENSHOT_PATH}}/app_{{APPLICATION_ID}}_error.png' 
+        });
+        
+        return {
+            success: false,
+            error: error.message,
+            screenshots: [`app_{{APPLICATION_ID}}_error.png`]
+        };
+    } finally {
+        await browser.close();
+    }
+}
+
+async function fillFieldIfExists(page, selectors, value, filledFields) {
+    if (!value) return;
+    
+    for (const selector of selectors) {
+        try {
+            const element = await page.locator(selector).first();
+            if (await element.isVisible({ timeout: 2000 })) {
+                await element.fill(value);
+                filledFields.push(`${selector}: ${value}`);
+                return;
+            }
+        } catch (e) {
+            // Continue to next selector
+        }
+    }
+}
+
+async function handleYesNoQuestion(page, textPhrases, answer, filledFields) {
+    for (const phrase of textPhrases) {
+        try {
+            // Look for radio buttons or checkboxes near text containing the phrase
+            const container = await page.locator(`:has-text("${phrase}")`).first();
+            if (await container.isVisible({ timeout: 2000 })) {
+                const yesSelector = answer ? 'input[value="yes"], input[value="Yes"], input[value="true"]' : 'input[value="no"], input[value="No"], input[value="false"]';
+                const yesInput = container.locator(yesSelector).first();
+                
+                if (await yesInput.isVisible({ timeout: 1000 })) {
+                    await yesInput.check();
+                    filledFields.push(`${phrase}: ${answer ? 'Yes' : 'No'}`);
+                    return;
+                }
+            }
+        } catch (e) {
+            // Continue
+        }
+    }
+}
+
+// Run the automation
+automateApplication();
+JAVASCRIPT;
+    }
+    
+    /**
+     * Simulate application processing for TEST_MODE
+     */
+    protected function simulateApplication(
+        Lead $lead, 
+        ?JobSiteStructure $siteStructure, 
+        array $formData, 
+        JobApplication $application,
+        string $mode = 'full'
+    ): array {
+        // Simulate processing time
+        sleep(rand(2, 5));
+        
+        // Simulate random success/failure (80% success rate)
+        $success = rand(1, 100) <= 80;
+        
+        if ($success) {
+            return [
+                'success' => true,
+                'final_url' => $lead->source_url . '/confirmation',
+                'confirmation_number' => 'TEST-' . strtoupper(substr(md5($application->id . time()), 0, 8)),
+                'confirmation_message' => 'Thank you for your application! We will review it and get back to you soon.',
+                'duration' => rand(15, 45),
+                'screenshots' => [
+                    "test_app_{$application->id}_initial.png",
+                    "test_app_{$application->id}_form.png",
+                    "test_app_{$application->id}_filled.png",
+                    $mode === 'full' ? "test_app_{$application->id}_submitted.png" : null
+                ],
+                'session_data' => $mode === 'fill_only' ? [
+                    'browser_session_id' => 'test-session-' . $application->id,
+                    'filled_fields' => [
+                        'First Name: ' . $formData['personal']['first_name'],
+                        'Last Name: ' . $formData['personal']['last_name'],
+                        'Email: ' . $formData['personal']['email'],
+                        'Resume uploaded successfully'
+                    ]
+                ] : null
+            ];
+        } else {
+            // Simulate various failure scenarios
+            $errors = [
+                'Could not find application form on the page',
+                'Failed to upload resume file',
+                'Application form validation failed',
+                'Site returned an error during submission',
+                'Could not find submit button'
+            ];
+            
+            return [
+                'success' => false,
+                'error' => $errors[array_rand($errors)],
+                'duration' => rand(10, 30),
+                'screenshots' => [
+                    "test_app_{$application->id}_error.png"
+                ]
+            ];
+        }
+    }
+
+    /**
+     * Execute the Playwright script
+     */
+    protected function executePlaywrightScript(string $script): array
+    {
+        $maxRetries = 3;
+        $lastError = null;
+        
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $result = $this->attemptPlaywrightExecution($script, $attempt);
+                
+                // If we got a successful result, return it
+                if (isset($result['success']) && $result['success']) {
+                    if ($attempt > 1) {
+                        Log::info('Playwright execution succeeded on retry', ['attempt' => $attempt]);
+                    }
+                    return $result;
+                }
+                
+                // If result indicates no forms found but execution was successful, return it
+                if (isset($result['forms']) && is_array($result['forms'])) {
+                    return $result;
+                }
+                
+                $lastError = $result['error'] ?? 'Unknown error';
+                
+            } catch (\Exception $e) {
+                $lastError = $e->getMessage();
+                Log::warning('Playwright execution attempt failed', [
+                    'attempt' => $attempt,
+                    'error' => $lastError
+                ]);
+            }
+            
+            // Wait before retry (except on last attempt)
+            if ($attempt < $maxRetries) {
+                sleep(2); // 2 second delay before retry
+            }
+        }
+        
+        Log::error('All Playwright execution attempts failed', [
+            'max_retries' => $maxRetries,
+            'final_error' => $lastError
+        ]);
+        
+        return [
+            'success' => false,
+            'error' => 'All Playwright execution attempts failed: ' . $lastError
+        ];
+    }
+    
+    protected function attemptPlaywrightExecution(string $script, int $attempt): array
+    {
+        // Save script to application directory (where node_modules exists)
+        $appDir = base_path();
+        $tempScriptPath = $appDir . '/temp_playwright_' . time() . '_' . rand(1000, 9999) . '.js';
+        file_put_contents($tempScriptPath, $script);
+        
+        try {
+            // Execute the script with Node.js from application directory
+            // Ensure consistent environment for both CLI and web contexts
+            $nodeCommand = "node " . escapeshellarg(basename($tempScriptPath));
+            
+            // Add environment variables for consistent execution
+            $envVars = [
+                'HOME=/tmp',
+                'USER=www-data', 
+                'NODE_ENV=production',
+                'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/node/bin'
+            ];
+            
+            // Use full path to node if available
+            $nodePath = trim(shell_exec('which node 2>/dev/null') ?: 'node');
+            $nodeCommand = $nodePath . " " . escapeshellarg(basename($tempScriptPath));
+            
+            $command = "cd " . escapeshellarg($appDir) . " && " . implode(' ', $envVars) . " " . $nodeCommand;
+            
+            // Execute the process with timeout (shorter for web requests to prevent nginx timeout)
+            // Increased CLI timeout for form submissions that require more time
+            $timeout = (php_sapi_name() === 'cli') ? 300 : 30; // 30s for web, 300s (5min) for CLI
+            
+            Log::info('Executing Playwright script', [
+                'attempt' => $attempt,
+                'command' => $command,
+                'script_path' => $tempScriptPath,
+                'working_dir' => $appDir,
+                'timeout' => $timeout,
+                'sapi' => php_sapi_name(),
+                'is_cli' => php_sapi_name() === 'cli'
+            ]);
+            
+            $result = Process::timeout($timeout)->run($command);
+            
+            $output = $result->output();
+            $errorOutput = $result->errorOutput();
+            
+            // Enhanced debugging for web vs CLI differences
+            Log::info('Process execution details', [
+                'attempt' => $attempt,
+                'exit_code' => $result->exitCode(),
+                'successful' => $result->successful(),
+                'failed' => $result->failed(),
+                'timeout_exceeded' => $result->exitCode() === 124,
+                'output_length' => strlen($output),
+                'error_length' => strlen($errorOutput),
+                'sapi' => php_sapi_name()
+            ]);
+            
+            // Check if process failed
+            if ($result->failed()) {
+                Log::warning('Playwright process failed', [
+                    'exit_code' => $result->exitCode(),
+                    'error_output' => $errorOutput
+                ]);
+                
+                // Check for timeout (exit code 124 is common for timeout)
+                if ($result->exitCode() === 124) {
+                    throw new \Exception("Playwright script timed out after {$timeout} seconds");
+                }
+            }
+            
+            Log::info('Playwright script execution completed', [
+                'attempt' => $attempt,
+                'output_length' => strlen($output),
+                'error_length' => strlen($errorOutput),
+                'first_200_chars' => substr($output, 0, 200)
+            ]);
+            
+            // Log error output if present
+            if (!empty($errorOutput)) {
+                Log::error('Playwright script error output', [
+                    'attempt' => $attempt,
+                    'error_output' => $errorOutput,
+                    'script_path' => $tempScriptPath
+                ]);
+            }
+            
+            // Try to parse JSON result from output
+            $lines = explode("\n", $output);
+            foreach (array_reverse($lines) as $line) {
+                $line = trim($line);
+                if (strpos($line, '{') === 0) {
+                    $result = json_decode($line, true);
+                    if ($result !== null) {
+                        Log::info('Successfully parsed Playwright result', [
+                            'success' => $result['success'] ?? false,
+                            'forms_count' => count($result['forms'] ?? [])
+                        ]);
+                        return $result;
+                    }
+                }
+            }
+            
+            // If no JSON found, look for RESULT: prefix
+            foreach ($lines as $line) {
+                if (strpos($line, 'RESULT:') === 0) {
+                    $jsonPart = substr($line, 7);
+                    $result = json_decode(trim($jsonPart), true);
+                    if ($result !== null) {
+                        return $result;
+                    }
+                }
+            }
+            
+            // If no JSON found, return error with debug info
+            return [
+                'success' => false,
+                'error' => 'No valid result returned from Playwright script',
+                'output' => $output,
+                'error_output' => $errorOutput,
+                'debug_lines' => array_slice($lines, -10) // Last 10 lines
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Playwright script execution failed', [
+                'error' => $e->getMessage(),
+                'script_path' => $tempScriptPath
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        } finally {
+            // Clean up temp file
+            if (file_exists($tempScriptPath)) {
+                unlink($tempScriptPath);
+            }
+        }
+    }
+
+    /**
+     * NEW: Enhanced application processing with LLM analysis and caching
+     */
+    public function processJobApplicationWithLLM(string $jobUrl, int $userId, array $userFormData = []): array
+    {
+        $startTime = microtime(true);
+        $domain = parse_url($jobUrl, PHP_URL_HOST);
+        
+        Log::info('Starting enhanced Playwright automation', [
+            'job_url' => $jobUrl,
+            'domain' => $domain,
+            'user_id' => $userId
+        ]);
+        
+        try {
+            // Step 1: Check if we have cached analysis for this domain
+            $siteStructure = $this->getCachedSiteStructure($domain);
+            
+            if (!$siteStructure) {
+                // Step 2: Analyze site with Playwright + LLM
+                $siteStructure = $this->analyzeSiteStructureWithLLM($jobUrl, $domain);
+            }
+            
+            // Step 3: Map user data to form fields
+            $fieldMappings = $this->mapUserDataToFields($siteStructure, $userId, $userFormData);
+            
+            // Step 4: Identify missing data that user needs to provide
+            $missingFields = $this->identifyMissingFields($fieldMappings, $siteStructure);
+            
+            if (!empty($missingFields)) {
+                $sessionId = $this->generateSessionId($jobUrl, $userId);
+                
+                // Store session data for later use when user submits missing fields
+                Cache::put("session_{$sessionId}", [
+                    'status' => 'needs_user_input',
+                    'job_url' => $jobUrl,
+                    'form_data' => $fieldMappings,
+                    'site_structure' => $siteStructure,
+                    'user_id' => $userId,
+                    'missing_fields' => $missingFields
+                ], 1800); // 30 minutes
+                
+                Log::info('Session stored for missing fields input', [
+                    'session_id' => $sessionId,
+                    'missing_fields_count' => count($missingFields)
+                ]);
+                
+                return [
+                    'status' => 'needs_user_input',
+                    'missing_fields' => $missingFields,
+                    'site_structure' => $siteStructure->toArray(),
+                    'session_id' => $sessionId
+                ];
+            }
+            
+            // Step 5: Execute form filling in headless browser
+            $result = $this->executeEnhancedFormFilling($jobUrl, $fieldMappings, $siteStructure);
+            
+            // Step 6: Update success metrics
+            $this->updateSiteStructureMetrics($siteStructure, $result['success']);
+            
+            $executionTime = microtime(true) - $startTime;
+            
+            if ($result['success']) {
+                // Store session for final submission
+                Cache::put("session_{$result['session_id']}", [
+                    'status' => 'ready_to_submit',
+                    'job_url' => $jobUrl,
+                    'form_data' => $fieldMappings,
+                    'site_structure' => $siteStructure,
+                    'browser_session' => $result['browser_session'] ?? null,
+                    'user_id' => $userId
+                ], 1800); // 30 minutes
+                
+                Log::info('Session stored for submission', [
+                    'session_id' => $result['session_id'],
+                    'filled_fields' => $result['filled_fields'] ?? []
+                ]);
+            }
+            
+            return [
+                'status' => $result['success'] ? 'ready_to_submit' : 'failed',
+                'execution_time' => round($executionTime, 2),
+                'filled_fields' => $result['filled_fields'] ?? [],
+                'errors' => $result['errors'] ?? [],
+                'requires_captcha' => $result['requires_captcha'] ?? false,
+                'session_id' => $result['session_id'] ?? null,
+                'screenshots' => $result['screenshots'] ?? []
+            ];
+            
+        } catch (Exception $e) {
+            Log::error('Enhanced Playwright automation failed', [
+                'job_url' => $jobUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'status' => 'error',
+                'error' => $e->getMessage(),
+                'execution_time' => round(microtime(true) - $startTime, 2)
+            ];
+        }
+    }
+    
+    /**
+     * Get cached site structure or return null if needs analysis
+     */
+    protected function getCachedSiteStructure(string $domain): ?JobSiteStructure
+    {
+        $structure = JobSiteStructure::where('domain', $domain)
+            ->where('requires_reanalysis', false)
+            ->first();
+            
+        if ($structure) {
+            // Update usage tracking
+            $structure->increment('usage_count');
+            $structure->update(['last_used_at' => now()]);
+            
+            Log::info('Using cached site structure', [
+                'domain' => $domain,
+                'platform' => $structure->platform_name,
+                'last_analyzed' => $structure->last_analyzed_at
+            ]);
+        }
+        
+        return $structure;
+    }
+    
+    /**
+     * Analyze site structure using Playwright + OpenAI
+     */
+    protected function analyzeSiteStructureWithLLM(string $jobUrl, string $domain): JobSiteStructure
+    {
+        $startTime = microtime(true);
+        
+        Log::info('Starting site analysis with LLM', ['url' => $jobUrl]);
+        
+        // Execute Playwright script to extract form data
+        $playwrightResult = $this->runPlaywrightFormAnalysis($jobUrl);
+        
+        if (!$playwrightResult['success']) {
+            throw new Exception('Playwright form analysis failed: ' . $playwrightResult['error']);
+        }
+        
+        // Analyze with OpenAI for semantic field mapping (with cost optimization)
+        $llmAnalysis = $this->analyzeFormsWithLLM($playwrightResult['forms'], $playwrightResult);
+        
+        $analysisTime = microtime(true) - $startTime;
+        
+        // Store in database
+        $siteStructure = JobSiteStructure::updateOrCreate(
+            ['domain' => $domain],
+            [
+                'platform_name' => $llmAnalysis['platform_name'] ?? 'Unknown',
+                'automation_strategy' => 'playwright_llm',
+                'application_flow' => ['playwright_analysis'], // Required field
+                'form_fields' => $playwrightResult['forms'],
+                'button_selectors' => [], // Required field 
+                'field_mappings' => $llmAnalysis['field_mappings'] ?? [], // Required field
+                'success_indicators' => ['form_submission'], // Required field
+                'llm_analysis' => $llmAnalysis,
+                'field_semantic_map' => $llmAnalysis['field_mappings'] ?? [],
+                'validation_rules' => $llmAnalysis['validation_rules'] ?? [],
+                'submission_flow' => $llmAnalysis['submission_flow'] ?? [],
+                'has_captcha' => $playwrightResult['has_captcha'] ?? false,
+                'captcha_config' => $playwrightResult['captcha_config'] ?? null,
+                'analysis_time_seconds' => round($analysisTime, 2),
+                'last_analyzed_at' => now(),
+                'llm_model' => 'gpt-4',
+                'analysis_version' => '1.0',
+                'requires_reanalysis' => false
+            ]
+        );
+        
+        Log::info('Site analysis completed', [
+            'domain' => $domain,
+            'analysis_time' => round($analysisTime, 2),
+            'fields_found' => count($playwrightResult['forms'])
+        ]);
+        
+        return $siteStructure;
+    }
+    
+    /**
+     * Submit missing fields and continue automation
+     */
+    public function submitMissingFieldsAndContinue(string $sessionId, array $missingFieldValues, int $userId): array
+    {
+        Log::info('Submitting missing fields', [
+            'session_id' => $sessionId,
+            'user_id' => $userId,
+            'fields_count' => count($missingFieldValues)
+        ]);
+        
+        try {
+            // Retrieve session data from cache
+            $automationSessionKey = "session_{$sessionId}";
+            $sessionData = Cache::get($automationSessionKey);
+            
+            Log::info('Session retrieval attempt', [
+                'session_id' => $sessionId,
+                'automation_session_key' => $automationSessionKey,
+                'session_exists' => $sessionData !== null,
+                'session_data_preview' => $sessionData ? array_keys($sessionData) : null
+            ]);
+            
+            if (!$sessionData) {
+                // Try to find if there are any similar session keys in cache for debugging
+                Log::error('Failed to submit missing fields', [
+                    'session_id' => $sessionId,
+                    'error' => 'Session expired or not found',
+                    'automation_session_key' => $automationSessionKey
+                ]);
+                throw new Exception('Session expired or not found');
+            }
+            
+            // Merge missing field values with existing data
+            $updatedFormData = array_merge($sessionData['form_data'] ?? [], $missingFieldValues);
+            
+            // Execute form filling with complete data
+            $result = $this->executeEnhancedFormFilling(
+                $sessionData['job_url'], 
+                $updatedFormData, 
+                $sessionData['site_structure']
+            );
+            
+            if ($result['success']) {
+                // Store session for final submission
+                Cache::put("session_{$sessionId}", [
+                    'status' => 'ready_to_submit',
+                    'job_url' => $sessionData['job_url'],
+                    'form_data' => $updatedFormData,
+                    'site_structure' => $sessionData['site_structure'],
+                    'browser_session' => $result['browser_session'] ?? null
+                ], 1800); // 30 minutes
+                
+                return [
+                    'status' => 'ready_to_submit',
+                    'filled_fields' => $result['filled_fields'] ?? [],
+                    'session_id' => $sessionId
+                ];
+            } else {
+                return [
+                    'status' => 'error',
+                    'error' => $result['error'] ?? 'Form filling failed'
+                ];
+            }
+            
+        } catch (Exception $e) {
+            Log::error('Failed to submit missing fields', [
+                'session_id' => $sessionId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return [
+                'status' => 'error',
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Execute final application submission
+     */
+    public function executeApplicationSubmission(string $sessionId, int $userId): array
+    {
+        Log::info('Executing final application submission', [
+            'session_id' => $sessionId,
+            'user_id' => $userId
+        ]);
+        
+        try {
+            // Retrieve session data
+            $sessionData = Cache::get("session_{$sessionId}");
+            
+            if (!$sessionData || $sessionData['status'] !== 'ready_to_submit') {
+                throw new Exception('Session not ready for submission');
+            }
+            
+            // Execute final submission
+            $result = $this->executeFormSubmission($sessionData, $userId);
+            
+            if ($result['success']) {
+                // Clean up session
+                Cache::forget("session_{$sessionId}");
+                
+                return [
+                    'status' => 'completed',
+                    'confirmation_message' => $result['confirmation_message'] ?? 'Application submitted successfully',
+                    'confirmation_number' => $result['confirmation_number'] ?? null,
+                    'final_url' => $result['final_url'] ?? null
+                ];
+            } else {
+                return [
+                    'status' => 'error',
+                    'error' => $result['error'] ?? 'Submission failed',
+                    'requires_captcha' => $result['requires_captcha'] ?? false
+                ];
+            }
+            
+        } catch (Exception $e) {
+            Log::error('Application submission failed', [
+                'session_id' => $sessionId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return [
+                'status' => 'error',
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Generate a unique session ID for tracking automation state
+     */
+    protected function generateSessionId(string $jobUrl, int $userId): string
+    {
+        return md5($jobUrl . $userId . time()) . '_' . time();
+    }
+    
+    /**
+     * Map user data to semantic fields based on site structure
+     */
+    protected function mapUserDataToFields(JobSiteStructure $siteStructure, int $userId, array $userFormData): array
+    {
+        // Basic field mappings
+        $mappings = [
+            'first_name' => $userFormData['firstName'] ?? '',
+            'last_name' => $userFormData['lastName'] ?? '',
+            'email' => $userFormData['email'] ?? '',
+            'phone' => $userFormData['phone'] ?? '',
+            'current_location' => $userFormData['currentLocation'] ?? ''
+        ];
+        
+        // Add address fields from userFormData (handle null values properly)
+        if (isset($userFormData['address']) && !empty($userFormData['address'])) {
+            $mappings['streetAddress'] = $userFormData['address'];
+        }
+        if (isset($userFormData['city']) && !empty($userFormData['city'])) {
+            $mappings['city'] = $userFormData['city'];
+        }
+        if (isset($userFormData['state']) && !empty($userFormData['state'])) {
+            $mappings['state'] = $userFormData['state'];
+        }
+        if (isset($userFormData['zip']) && !empty($userFormData['zip'])) {
+            $mappings['zip'] = $userFormData['zip'];
+        }
+        
+        // Add LinkedIn and website URLs if available
+        if (isset($userFormData['linkedinUrl'])) {
+            $mappings['linkedinUrl'] = $userFormData['linkedinUrl'];
+        }
+        if (isset($userFormData['portfolioUrl'])) {
+            $mappings['websiteUrl'] = $userFormData['portfolioUrl'];
+        }
+        
+        return $mappings;
+    }
+    
+    /**
+     * Identify fields that are missing from user data
+     */
+    protected function identifyMissingFields(array $fieldMappings, JobSiteStructure $siteStructure): array
+    {
+        $missingFields = [];
+        
+        // Get all form fields from the site structure
+        $formFields = $siteStructure->form_fields ?? [];
+        
+        // Fields that we can auto-fill (already have data for)
+        $autoFillableFields = array_keys($fieldMappings);
+        
+        // Process each form in the site structure
+        foreach ($formFields as $form) {
+            if (!isset($form['fields'])) continue;
+            
+            foreach ($form['fields'] as $field) {
+                $fieldName = $field['name'] ?? $field['id'] ?? '';
+                $fieldType = $field['type'] ?? '';
+                $isRequired = $field['required'] ?? false;
+                
+                // Skip if no field name or if it's a hidden field
+                if (empty($fieldName) || $fieldType === 'hidden') continue;
+                
+                // Skip if we can already auto-fill this field
+                if (in_array($fieldName, $autoFillableFields)) continue;
+                
+                // Also check common field name variations
+                $fieldVariations = $this->getFieldVariations($fieldName);
+                $hasData = false;
+                foreach ($fieldVariations as $variation) {
+                    if (isset($fieldMappings[$variation])) {
+                        $hasData = true;
+                        break;
+                    }
+                }
+                if ($hasData) continue;
+                
+                // Determine if this field needs user input
+                $needsUserInput = $this->fieldNeedsUserInput($field, $fieldMappings);
+                
+                if ($needsUserInput) {
+                    $fieldData = [
+                        'semantic_field' => $fieldName,
+                        'label' => $this->generateFieldLabel($field),
+                        'type' => $this->mapFieldType($fieldType),
+                        'required' => $isRequired,
+                        'field_name' => $fieldName,
+                        'original_field' => $field
+                    ];
+                    
+                    // Add dropdown options if it's a select field
+                    if ($fieldType === 'select-one' && isset($field['options'])) {
+                        $fieldData['options'] = $field['options'];
+                    } elseif ($fieldType === 'select-one') {
+                        // Add common options for known dropdowns
+                        $fieldData['options'] = $this->getDefaultSelectOptions($fieldName);
+                    }
+                    
+                    $missingFields[] = $fieldData;
+                }
+            }
+        }
+        
+        Log::info('Identified missing fields', [
+            'missing_count' => count($missingFields),
+            'fields' => array_column($missingFields, 'semantic_field')
+        ]);
+        
+        return $missingFields;
+    }
+    
+    /**
+     * Determine if a field needs user input
+     */
+    protected function fieldNeedsUserInput(array $field, array $fieldMappings): bool
+    {
+        $fieldName = $field['name'] ?? $field['id'] ?? '';
+        $fieldType = $field['type'] ?? '';
+        $isRequired = $field['required'] ?? false;
+        
+        // Always request user input for these field types
+        $alwaysPromptTypes = ['file', 'textarea'];
+        if (in_array($fieldType, $alwaysPromptTypes)) {
+            return true;
+        }
+        
+        // Request input for required address fields
+        $addressFields = ['streetAddress', 'city', 'zip', 'state', 'countryId'];
+        if (in_array($fieldName, $addressFields)) {
+            return true;
+        }
+        
+        // Request input for required fields we don't have data for
+        if ($isRequired && !isset($fieldMappings[$fieldName])) {
+            return true;
+        }
+        
+        // Request input for important optional fields
+        $importantOptionalFields = ['dateAvailable', 'desiredPay', 'websiteUrl', 'linkedinUrl'];
+        if (in_array($fieldName, $importantOptionalFields)) {
+            return true;
+        }
+        
+        // Request input for custom questions
+        if (strpos($fieldName, 'customQuestions') !== false) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Generate a user-friendly label for a field
+     */
+    protected function generateFieldLabel(array $field): string
+    {
+        $fieldName = $field['name'] ?? $field['id'] ?? '';
+        $fieldType = $field['type'] ?? '';
+        
+        // PRIORITY 1: Use captured associated label if available
+        if (isset($field['associatedLabel']) && !empty(trim($field['associatedLabel']))) {
+            $cleanLabel = trim($field['associatedLabel']);
+            // Clean up common label artifacts
+            $cleanLabel = preg_replace('/\*\s*$/', '', $cleanLabel);
+            $cleanLabel = preg_replace('/:\s*$/', '', $cleanLabel);
+            $cleanLabel = trim($cleanLabel);
+            
+            if (strlen($cleanLabel) > 2) {
+                return $cleanLabel;
+            }
+        }
+        
+        // PRIORITY 2: Handle specific field names
+        $labelMap = [
+            'streetAddress' => 'Street Address',
+            'city' => 'City',
+            'zip' => 'ZIP Code',
+            'state' => 'State',
+            'countryId' => 'Country',
+            'dateAvailable' => 'Available Start Date',
+            'desiredPay' => 'Desired Salary/Pay',
+            'websiteUrl' => 'Personal Website',
+            'linkedinUrl' => 'LinkedIn Profile URL'
+        ];
+        
+        if (isset($labelMap[$fieldName])) {
+            return $labelMap[$fieldName];
+        }
+        
+        // PRIORITY 3: Handle file uploads
+        if ($fieldType === 'file') {
+            return 'Resume/CV Upload';
+        }
+        
+        // PRIORITY 4: Handle custom questions - try existing field properties
+        if (strpos($fieldName, 'customQuestions') !== false) {
+            // Look for existing field properties that might have question text
+            if (isset($field['label']) && !empty(trim($field['label']))) {
+                return trim($field['label']);
+            }
+            if (isset($field['placeholder']) && !empty(trim($field['placeholder']))) {
+                return trim($field['placeholder']);
+            }
+            if (isset($field['aria-label']) && !empty(trim($field['aria-label']))) {
+                return trim($field['aria-label']);
+            }
+            
+            // Extract question number for more specific fallback
+            $questionNum = preg_replace('/[^0-9]/', '', $fieldName);
+            if ($questionNum) {
+                return "Custom Question #$questionNum";
+            } else {
+                return "Custom Question";
+            }
+        }
+        
+        // PRIORITY 5: Default - convert field name to readable format
+        return ucwords(str_replace(['_', '-'], ' ', $fieldName));
+    }
+    
+    /**
+     * Map field type to frontend-friendly type
+     */
+    protected function mapFieldType(string $fieldType): string
+    {
+        $typeMap = [
+            'file' => 'file',
+            'textarea' => 'textarea',
+            'select-one' => 'select',
+            'date' => 'date',
+            'email' => 'email',
+            'tel' => 'tel',
+            'url' => 'url'
+        ];
+        
+        return $typeMap[$fieldType] ?? 'text';
+    }
+    
+    /**
+     * Get field name variations to check for existing data
+     */
+    protected function getFieldVariations(string $fieldName): array
+    {
+        $variations = [$fieldName];
+        
+        // Common name mappings
+        $nameMap = [
+            'firstName' => ['first_name', 'fname'],
+            'lastName' => ['last_name', 'lname'], 
+            'email' => ['email_address', 'emailAddress'],
+            'phone' => ['telephone', 'phoneNumber']
+        ];
+        
+        if (isset($nameMap[$fieldName])) {
+            $variations = array_merge($variations, $nameMap[$fieldName]);
+        }
+        
+        return $variations;
+    }
+    
+    /**
+     * Get default options for common select fields
+     */
+    protected function getDefaultSelectOptions(string $fieldName): array
+    {
+        switch ($fieldName) {
+            case 'state':
+                return [
+                    ['value' => '', 'label' => 'Select State'],
+                    ['value' => 'AL', 'label' => 'Alabama'],
+                    ['value' => 'AK', 'label' => 'Alaska'],
+                    ['value' => 'AZ', 'label' => 'Arizona'],
+                    ['value' => 'AR', 'label' => 'Arkansas'],
+                    ['value' => 'CA', 'label' => 'California'],
+                    ['value' => 'CO', 'label' => 'Colorado'],
+                    ['value' => 'CT', 'label' => 'Connecticut'],
+                    ['value' => 'DE', 'label' => 'Delaware'],
+                    ['value' => 'FL', 'label' => 'Florida'],
+                    ['value' => 'GA', 'label' => 'Georgia'],
+                    ['value' => 'HI', 'label' => 'Hawaii'],
+                    ['value' => 'ID', 'label' => 'Idaho'],
+                    ['value' => 'IL', 'label' => 'Illinois'],
+                    ['value' => 'IN', 'label' => 'Indiana'],
+                    ['value' => 'IA', 'label' => 'Iowa'],
+                    ['value' => 'KS', 'label' => 'Kansas'],
+                    ['value' => 'KY', 'label' => 'Kentucky'],
+                    ['value' => 'LA', 'label' => 'Louisiana'],
+                    ['value' => 'ME', 'label' => 'Maine'],
+                    ['value' => 'MD', 'label' => 'Maryland'],
+                    ['value' => 'MA', 'label' => 'Massachusetts'],
+                    ['value' => 'MI', 'label' => 'Michigan'],
+                    ['value' => 'MN', 'label' => 'Minnesota'],
+                    ['value' => 'MS', 'label' => 'Mississippi'],
+                    ['value' => 'MO', 'label' => 'Missouri'],
+                    ['value' => 'MT', 'label' => 'Montana'],
+                    ['value' => 'NE', 'label' => 'Nebraska'],
+                    ['value' => 'NV', 'label' => 'Nevada'],
+                    ['value' => 'NH', 'label' => 'New Hampshire'],
+                    ['value' => 'NJ', 'label' => 'New Jersey'],
+                    ['value' => 'NM', 'label' => 'New Mexico'],
+                    ['value' => 'NY', 'label' => 'New York'],
+                    ['value' => 'NC', 'label' => 'North Carolina'],
+                    ['value' => 'ND', 'label' => 'North Dakota'],
+                    ['value' => 'OH', 'label' => 'Ohio'],
+                    ['value' => 'OK', 'label' => 'Oklahoma'],
+                    ['value' => 'OR', 'label' => 'Oregon'],
+                    ['value' => 'PA', 'label' => 'Pennsylvania'],
+                    ['value' => 'RI', 'label' => 'Rhode Island'],
+                    ['value' => 'SC', 'label' => 'South Carolina'],
+                    ['value' => 'SD', 'label' => 'South Dakota'],
+                    ['value' => 'TN', 'label' => 'Tennessee'],
+                    ['value' => 'TX', 'label' => 'Texas'],
+                    ['value' => 'UT', 'label' => 'Utah'],
+                    ['value' => 'VT', 'label' => 'Vermont'],
+                    ['value' => 'VA', 'label' => 'Virginia'],
+                    ['value' => 'WA', 'label' => 'Washington'],
+                    ['value' => 'WV', 'label' => 'West Virginia'],
+                    ['value' => 'WI', 'label' => 'Wisconsin'],
+                    ['value' => 'WY', 'label' => 'Wyoming']
+                ];
+                
+            case 'countryId':
+            case 'country':
+                return [
+                    ['value' => '', 'label' => 'Select Country'],
+                    ['value' => '1', 'label' => 'United States'],
+                    ['value' => '2', 'label' => 'Canada'],
+                    ['value' => '3', 'label' => 'United Kingdom'],
+                    ['value' => '4', 'label' => 'Australia'],
+                    ['value' => '5', 'label' => 'Germany'],
+                    ['value' => '6', 'label' => 'France'],
+                    ['value' => '7', 'label' => 'Other']
+                ];
+                
+            default:
+                return [
+                    ['value' => '', 'label' => 'Please select...']
+                ];
+        }
+    }
+    
+    /**
+     * Execute enhanced form filling with LLM-mapped fields
+     */
+    protected function executeEnhancedFormFilling(string $jobUrl, array $fieldMappings, JobSiteStructure $siteStructure): array
+    {
+        $sessionId = $this->generateSessionId($jobUrl, 1);
+        
+        try {
+            Log::info('Starting real form filling execution', [
+                'job_url' => $jobUrl,
+                'field_mappings' => $fieldMappings,
+                'session_id' => $sessionId
+            ]);
+            
+            // Build form filling script
+            $script = $this->buildFormFillingScript($jobUrl, $fieldMappings, $sessionId);
+            
+            // Execute the script
+            $result = $this->executePlaywrightScript($script);
+            
+            if (!$result['success']) {
+                throw new Exception('Form filling failed: ' . ($result['error'] ?? 'Unknown error'));
+            }
+            
+            Log::info('Form filling completed successfully', [
+                'session_id' => $sessionId,
+                'filled_fields' => $result['filled_fields'] ?? [],
+                'final_url' => $result['final_url'] ?? $jobUrl
+            ]);
+            
+            return [
+                'success' => true,
+                'filled_fields' => $result['filled_fields'] ?? [],
+                'session_id' => $sessionId,
+                'browser_session' => $result['browser_session'] ?? null,
+                'final_url' => $result['final_url'] ?? $jobUrl,
+                'requires_captcha' => $result['requires_captcha'] ?? false
+            ];
+            
+        } catch (Exception $e) {
+            Log::error('Form filling execution failed', [
+                'job_url' => $jobUrl,
+                'session_id' => $sessionId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'filled_fields' => [],
+                'session_id' => $sessionId
+            ];
+        }
+    }
+    
+    /**
+     * Execute form submission step
+     */
+    protected function executeFormSubmission(array $sessionData, int $userId): array
+    {
+        Log::info('Executing real form submission', [
+            'job_url' => $sessionData['job_url'],
+            'form_data_keys' => array_keys($sessionData['form_data'] ?? []),
+            'user_id' => $userId
+        ]);
+        
+        try {
+            $script = $this->buildFormSubmissionScript($sessionData, $userId);
+            $result = $this->executePlaywrightScript($script);
+            
+            if ($result['success']) {
+                Log::info('Form submission completed successfully', [
+                    'final_url' => $result['final_url'] ?? null,
+                    'confirmation_detected' => $result['confirmation_detected'] ?? false
+                ]);
+                
+                return [
+                    'success' => true,
+                    'confirmation_message' => $result['confirmation_message'] ?? 'Application submitted successfully',
+                    'confirmation_number' => $result['confirmation_number'] ?? null,
+                    'final_url' => $result['final_url'] ?? null,
+                    'requires_captcha' => $result['requires_captcha'] ?? false
+                ];
+            } else {
+                Log::error('Form submission failed', [
+                    'error' => $result['error'] ?? 'Unknown error'
+                ]);
+                
+                return [
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Form submission failed',
+                    'requires_captcha' => $result['requires_captcha'] ?? false
+                ];
+            }
+        } catch (Exception $e) {
+            Log::error('Form submission script execution failed', [
+                'error' => $e->getMessage()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => 'Script execution failed: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Update site structure success metrics
+     */
+    protected function updateSiteStructureMetrics(JobSiteStructure $siteStructure, bool $success): void
+    {
+        if ($success) {
+            $siteStructure->increment('successful_applications');
+        } else {
+            $siteStructure->increment('failed_applications');
+        }
+        
+        $total = $siteStructure->successful_applications + $siteStructure->failed_applications;
+        if ($total > 0) {
+            $successRate = ($siteStructure->successful_applications / $total) * 100;
+            $siteStructure->update(['success_rate' => round($successRate, 2)]);
+        }
+    }
+    
+    /**
+     * Placeholder methods for LLM integration (to be implemented)
+     */
+    protected function runPlaywrightFormAnalysis(string $jobUrl): array
+    {
+        // Force simple mode for debugging production issues
+        $forceSimpleMode = config('playwright.force_simple_mode', false);
+        
+        if ($forceSimpleMode) {
+            Log::info('Using simple mode (forced)', ['url' => $jobUrl]);
+            return $this->runSimplePlaywrightFormAnalysis($jobUrl);
+        }
+        
+        $script = $this->buildEnhancedNavigationScript($jobUrl);
+        
+        try {
+            Log::info('Starting enhanced Playwright navigation analysis', ['url' => $jobUrl]);
+            
+            $result = $this->executePlaywrightScript($script);
+            
+            if (!$result['success']) {
+                $error = $result['error'] ?? 'Unknown error';
+                
+                // Log detailed error information for debugging
+                Log::warning('Enhanced Playwright execution failed, attempting fallback', [
+                    'url' => $jobUrl,
+                    'error' => $error,
+                    'error_output' => $result['error_output'] ?? null,
+                    'debug_lines' => $result['debug_lines'] ?? null,
+                    'raw_output' => isset($result['output']) ? substr($result['output'], -500) : null
+                ]);
+                
+                // Check for specific error patterns that indicate environment issues
+                if (strpos($error, 'No valid result returned') !== false || 
+                    strpos($error, 'module not found') !== false ||
+                    strpos($error, 'chromium') !== false) {
+                    Log::info('Detected environment-specific error, skipping to fallback immediately');
+                    throw new Exception('Environment issue detected: ' . $error);
+                }
+                
+                throw new Exception('Playwright execution failed: ' . $error);
+            }
+            
+            Log::info('Playwright navigation analysis completed', [
+                'final_url' => $result['final_url'] ?? $jobUrl,
+                'navigation_steps' => count($result['navigation_steps'] ?? []),
+                'forms_found' => count($result['forms'] ?? []),
+                'platform_detected' => $result['platform_detected'] ?? 'Unknown'
+            ]);
+            
+            // Check if enhanced navigation found forms but no fields - fallback to simple extraction
+            $totalFields = 0;
+            if (isset($result['forms'])) {
+                foreach ($result['forms'] as $form) {
+                    $totalFields += count($form['fields'] ?? []);
+                }
+            }
+            
+            if ($totalFields === 0 && count($result['forms'] ?? []) > 0) {
+                Log::info('Enhanced navigation found forms but no fields, trying simple extraction on final URL', [
+                    'final_url' => $result['final_url'] ?? $jobUrl,
+                    'forms_with_no_fields' => count($result['forms'] ?? [])
+                ]);
+                
+                // Use simple extraction on the final URL from enhanced navigation
+                $simpleResult = $this->runSimplePlaywrightFormAnalysis($result['final_url'] ?? $jobUrl);
+                
+                if ($simpleResult['success'] && !empty($simpleResult['forms'])) {
+                    $simpleFields = 0;
+                    foreach ($simpleResult['forms'] as $form) {
+                        $simpleFields += count($form['fields'] ?? []);
+                    }
+                    
+                    if ($simpleFields > 0) {
+                        Log::info('Simple extraction found fields, using hybrid result', [
+                            'simple_forms' => count($simpleResult['forms']),
+                            'simple_fields' => $simpleFields
+                        ]);
+                        
+                        // Return enhanced navigation result but with simple extraction forms
+                        $result['forms'] = $simpleResult['forms'];
+                        $result['forms_count'] = count($simpleResult['forms']);
+                    }
+                }
+            }
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            Log::error('Enhanced Playwright navigation failed, trying fallback', [
+                'url' => $jobUrl,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback: Try simple form analysis without navigation
+            return $this->runSimplePlaywrightFormAnalysis($jobUrl);
+        }
+    }
+    
+    /**
+     * Fallback method: Simple form analysis without complex navigation
+     */
+    protected function runSimplePlaywrightFormAnalysis(string $jobUrl): array
+    {
+        $simpleScript = $this->buildSimpleFormAnalysisScript($jobUrl);
+        
+        try {
+            Log::info('Starting simple Playwright form analysis (fallback)', ['url' => $jobUrl]);
+            
+            $result = $this->executePlaywrightScript($simpleScript);
+            
+            if (!$result['success']) {
+                throw new Exception('Simple Playwright execution failed: ' . ($result['error'] ?? 'Unknown error'));
+            }
+            
+            Log::info('Simple Playwright analysis completed', [
+                'forms_found' => count($result['forms'] ?? []),
+                'title' => $result['title'] ?? 'Unknown'
+            ]);
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            Log::error('Simple Playwright analysis also failed', [
+                'url' => $jobUrl,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Return empty result to trigger manual fallback
+            return [
+                'success' => false,
+                'error' => 'All Playwright methods failed: ' . $e->getMessage(),
+                'forms' => [],
+                'has_captcha' => false
+            ];
+        }
+    }
+    
+    /**
+     * Build simple form analysis script without navigation complexity
+     */
+    protected function buildSimpleFormAnalysisScript(string $jobUrl): string
+    {
+        return <<<JAVASCRIPT
+const { firefox } = require('playwright');
+
+async function simpleFormAnalysis() {
+    const browser = await firefox.launch({ 
+        headless: true,
+        executablePath: '/var/www/html/browsers/firefox-1490/firefox/firefox',
+        args: [
+            '--no-sandbox',
+            '--memory-pressure-off',
+            '--max_old_space_size=256'
+        ]
+    });
+    
+    const page = await browser.newPage();
+    
+    try {
+        console.log('Simple form analysis starting...');
+        
+        // Navigate to the URL
+        await page.goto('{$jobUrl}', { 
+            waitUntil: 'domcontentloaded',
+            timeout: 15000 
+        });
+        
+        const title = await page.title();
+        console.log('Page title:', title);
+        
+        // Wait for forms to load
+        await page.waitForTimeout(3000);
+        
+        // Extract forms using basic selectors
+        const forms = await page.evaluate(() => {
+            const formElements = document.querySelectorAll('form');
+            const extractedForms = [];
+            
+            formElements.forEach((form, index) => {
+                const fields = [];
+                const inputs = form.querySelectorAll('input, select, textarea');
+                
+                inputs.forEach(input => {
+                    const field = {
+                        tag: input.tagName.toLowerCase(),
+                        type: input.type || 'text',
+                        name: input.name || '',
+                        id: input.id || '',
+                        placeholder: input.placeholder || '',
+                        required: input.required || false,
+                        className: input.className || '',
+                        value: input.value || '',
+                        'data-testid': input.getAttribute('data-testid') || '',
+                        'aria-label': input.getAttribute('aria-label') || ''
+                    };
+                    
+                    // Basic label extraction - safe and simple
+                    try {
+                        if (field.id) {
+                            const labelElement = document.querySelector('label[for="' + field.id + '"]');
+                            if (labelElement && labelElement.textContent) {
+                                const labelText = labelElement.textContent.trim();
+                                if (labelText.length > 2) {
+                                    field.associatedLabel = labelText;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Ignore label extraction errors
+                    }
+                    
+                    // Include fields with name, id, placeholder, data-testid, or aria-label
+                    // Also include visible input fields even without identifiers
+                    if (field.name || field.id || field.placeholder || 
+                        field['data-testid'] || field['aria-label'] ||
+                        (input.offsetParent !== null && field.type !== 'hidden')) {
+                        fields.push(field);
+                    }
+                });
+                
+                if (fields.length > 0) {
+                    extractedForms.push({
+                        index: index,
+                        action: form.action || '',
+                        method: form.method || 'post',
+                        fields: fields
+                    });
+                }
+            });
+            
+            return extractedForms;
+        });
+        
+        await browser.close();
+        
+        const result = {
+            success: true,
+            title: title,
+            forms: forms,
+            has_captcha: false,
+            platform_detected: 'unknown',
+            final_url: '{$jobUrl}',
+            forms_count: forms.length
+        };
+        
+        console.log('RESULT:', JSON.stringify(result));
+        return result;
+        
+    } catch (error) {
+        await browser.close();
+        console.error('Simple analysis error:', error);
+        const errorResult = {
+            success: false,
+            error: error.message,
+            forms: [],
+            has_captcha: false
+        };
+        console.log('RESULT:', JSON.stringify(errorResult));
+        return errorResult;
+    }
+}
+
+simpleFormAnalysis();
+JAVASCRIPT;
+    }
+    
+    /**
+     * Build form filling script with actual field filling logic
+     */
+    protected function buildFormFillingScript(string $jobUrl, array $fieldMappings, string $sessionId): string
+    {
+        $formDataJson = json_encode($fieldMappings, JSON_UNESCAPED_SLASHES);
+        
+        return <<<JAVASCRIPT
+const { firefox } = require('playwright');
+
+async function fillJobApplicationForm() {
+    const browser = await firefox.launch({ 
+        headless: true,
+        executablePath: '/var/www/html/browsers/firefox-1490/firefox/firefox',
+        args: [
+            '--no-sandbox',
+            '--memory-pressure-off',
+            '--max_old_space_size=256'
+        ]
+    });
+    
+    const page = await browser.newPage();
+    
+    try {
+        console.log('Starting form filling process...');
+        
+        // Navigate to the job application page
+        await page.goto('{$jobUrl}', { 
+            waitUntil: 'domcontentloaded',
+            timeout: 15000 
+        });
+        
+        console.log('Page loaded, waiting for forms...');
+        await page.waitForTimeout(3000);
+        
+        const formData = {$formDataJson};
+        const filledFields = [];
+        
+        // Helper function to fill field with human-like behavior
+        async function fillFieldIfExists(selectors, value, fieldName) {
+            if (!value || value.trim() === '') return false;
+            
+            for (const selector of selectors) {
+                try {
+                    const element = await page.locator(selector).first();
+                    if (await element.isVisible({ timeout: 1000 })) {
+                        // Human-like interaction: hover, click, then type
+                        await element.hover();
+                        await page.waitForTimeout(100 + Math.random() * 200); // Random delay 100-300ms
+                        
+                        await element.click();
+                        await page.waitForTimeout(50 + Math.random() * 100); // Random delay 50-150ms
+                        
+                        // Clear field first
+                        await element.selectText();
+                        await page.waitForTimeout(20 + Math.random() * 50);
+                        
+                        // Type with human-like speed (30-80ms per character)
+                        await element.type(value, { 
+                            delay: 30 + Math.random() * 50 
+                        });
+                        
+                        // Random pause after filling
+                        await page.waitForTimeout(200 + Math.random() * 500);
+                        
+                        console.log('Filled field:', fieldName, 'with value:', value);
+                        filledFields.push(fieldName);
+                        return true;
+                    }
+                } catch (e) {
+                    // Continue to next selector
+                }
+            }
+            return false;
+        }
+        
+        // Fill form fields based on mappings
+        console.log('Filling form fields...');
+        
+        // Name fields - Enhanced selectors including Greenhouse patterns
+        await fillFieldIfExists([
+            'input[name="firstname"]',        // Greenhouse uses "firstname" (no underscore)
+            'input[name="first_name"]', 
+            'input[name="firstName"]', 
+            'input[placeholder*="First"]',
+            'input[aria-label*="First"]',
+            'input[data-testid*="first"]',
+            '#first_name',
+            '#firstName',
+            'input[id*="first"]'
+        ], formData.first_name, 'first_name');
+        
+        await fillFieldIfExists([
+            'input[name="lastname"]',         // Greenhouse uses "lastname" (no underscore)
+            'input[name="last_name"]', 
+            'input[name="lastName"]', 
+            'input[placeholder*="Last"]',
+            'input[aria-label*="Last"]',
+            'input[data-testid*="last"]',
+            '#last_name',
+            '#lastName',
+            'input[id*="last"]'
+        ], formData.last_name, 'last_name');
+        
+        // Email field
+        await fillFieldIfExists([
+            'input[type="email"]',
+            'input[name="email"]',
+            'input[placeholder*="email"]',
+            'input[aria-label*="email"]',
+            'input[data-testid*="email"]',
+            '#email'
+        ], formData.email, 'email');
+        
+        // Phone field
+        await fillFieldIfExists([
+            'input[type="tel"]',
+            'input[name="phone"]',
+            'input[placeholder*="Phone"]',
+            'input[placeholder*="phone"]',
+            'input[aria-label*="phone"]',
+            'input[data-testid*="phone"]',
+            '#phone'
+        ], formData.phone, 'phone');
+        
+        // Location field
+        await fillFieldIfExists([
+            'input[name="location"]',
+            'input[name="current_location"]',
+            'input[placeholder*="Location"]',
+            'input[placeholder*="City"]',
+            'input[placeholder*="location"]',
+            'input[aria-label*="location"]',
+            'input[data-testid*="location"]',
+            '#location'
+        ], formData.current_location, 'current_location');
+        
+        // Human-like pause to review filled form (2-5 seconds)
+        console.log('Reviewing filled form before submission...');
+        await page.waitForTimeout(2000 + Math.random() * 3000);
+        
+        // Check for captcha
+        const hasCaptcha = await page.evaluate(() => {
+            const captchaSelectors = [
+                '.g-recaptcha',
+                '.h-captcha', 
+                '[data-sitekey]',
+                'iframe[src*="recaptcha"]',
+                'iframe[src*="hcaptcha"]'
+            ];
+            
+            return captchaSelectors.some(selector => {
+                const element = document.querySelector(selector);
+                return element && element.offsetParent !== null;
+            });
+        });
+        
+        const finalUrl = page.url();
+        console.log('Form filling completed. Fields filled:', filledFields.length);
+        
+        await browser.close();
+        
+        const result = {
+            success: true,
+            filled_fields: filledFields,
+            session_id: '{$sessionId}',
+            final_url: finalUrl,
+            requires_captcha: hasCaptcha,
+            browser_session: 'session_{$sessionId}'
+        };
+        
+        console.log('RESULT:', JSON.stringify(result));
+        return result;
+        
+    } catch (error) {
+        await browser.close();
+        console.error('Form filling error:', error);
+        const errorResult = {
+            success: false,
+            error: error.message,
+            filled_fields: [],
+            session_id: '{$sessionId}'
+        };
+        console.log('RESULT:', JSON.stringify(errorResult));
+        return errorResult;
+    }
+}
+
+fillJobApplicationForm();
+JAVASCRIPT;
+    }
+    
+    /**
+     * Build enhanced navigation script for ATS platforms and multi-step forms
+     */
+    protected function buildEnhancedNavigationScript(string $jobUrl): string
+    {
+        $userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+        
+        return <<<JAVASCRIPT
+const { firefox } = require('playwright');
+
+async function analyzeJobApplicationWithNavigation() {
+    const browser = await firefox.launch({ 
+        headless: true,
+        executablePath: '/var/www/html/browsers/firefox-1490/firefox/firefox',
+        args: [
+            '--no-sandbox',
+            '--memory-pressure-off',
+            '--max_old_space_size=256'
+        ]
+    });
+    
+    const context = await browser.newContext({
+        userAgent: '{$userAgent}',
+        viewport: { width: 1366, height: 768 }
+    });
+    
+    const page = await context.newPage();
+    
+    try {
+        console.log('Starting enhanced navigation analysis...');
+        console.log('Initial URL: {$jobUrl}');
+        
+        const navigationSteps = [];
+        const maxSteps = 5; // Prevent infinite loops
+        let currentStep = 0;
+        
+        // Step 1: Navigate to initial URL with fallback strategy
+        try {
+            await page.goto('{$jobUrl}', { 
+                waitUntil: 'networkidle',
+                timeout: 20000 
+            });
+        } catch (error) {
+            // Fallback: try with domcontentloaded if networkidle fails
+            console.log('Network idle failed, trying domcontentloaded...');
+            await page.goto('{$jobUrl}', { 
+                waitUntil: 'domcontentloaded',
+                timeout: 15000 
+            });
+            // Wait a bit for dynamic content
+            await page.waitForTimeout(3000);
+        }
+        
+        navigationSteps.push({
+            step: currentStep++,
+            action: 'initial_navigation',
+            url: page.url(),
+            title: await page.title()
+        });
+        
+        // Step 2: Detect platform early for optimized strategy
+        const platformDetected = await detectPlatform(page);
+        console.log('Platform detected:', platformDetected);
+        
+        // Step 3: Multi-step navigation with platform-specific logic
+        while (currentStep < maxSteps) {
+            const currentUrl = page.url();
+            
+            // Check if we're already on an application form
+            const formsOnPage = await page.evaluate(() => {
+                return document.querySelectorAll('form').length;
+            });
+            
+            const hasApplicationFields = await checkForApplicationFields(page);
+            
+            if (hasApplicationFields) {
+                console.log('Found application form at step', currentStep);
+                break;
+            }
+            
+            // Try to navigate to application form
+            const navigated = await attemptNavigation(page, platformDetected);
+            
+            if (!navigated) {
+                console.log('No more navigation options found at step', currentStep);
+                break;
+            }
+            
+            navigationSteps.push({
+                step: currentStep++,
+                action: 'button_click',
+                url: page.url(),
+                title: await page.title()
+            });
+            
+            // Wait for potential redirects/loading
+            await page.waitForTimeout(2000);
+            
+            // Break if URL hasn't changed (no navigation occurred)
+            if (page.url() === currentUrl) {
+                console.log('URL unchanged, stopping navigation');
+                break;
+            }
+        }
+        
+        // Step 4: Wait for JavaScript to load and extract form elements
+        console.log('Waiting for JavaScript and dynamic content...');
+        
+        // Enable JavaScript explicitly and wait for potential dynamic content
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
+            console.log('Network idle timeout, continuing...');
+        });
+        
+        // Wait for any lazy-loaded forms or JavaScript
+        await page.waitForTimeout(3000);
+        
+        // Check if page indicates JavaScript is required
+        const pageText = await page.textContent('body').catch(() => '');
+        if (pageText.includes('enable JavaScript') || pageText.includes('JavaScript is required')) {
+            console.log('Page requires JavaScript - ensuring it is enabled and waiting longer...');
+            await page.waitForTimeout(5000);
+        }
+        
+        const forms = await extractFormElements(page);
+        
+        // Step 5: Check for captcha and multi-step indicators
+        const hasCaptcha = await checkForCaptcha(page);
+        const multiStepIndicators = await checkForMultiStep(page);
+        
+        const result = {
+            success: true,
+            platform_detected: platformDetected,
+            final_url: page.url(),
+            navigation_steps: navigationSteps,
+            forms: forms,
+            has_captcha: hasCaptcha,
+            multi_step_flow: multiStepIndicators,
+            forms_count: forms.length,
+            navigation_successful: navigationSteps.length > 1
+        };
+        
+        console.log('RESULT:', JSON.stringify(result));
+        return result;
+        
+    } catch (error) {
+        console.error('Enhanced navigation error:', error);
+        const errorResult = {
+            success: false,
+            error: error.message,
+            forms: [],
+            has_captcha: false
+        };
+        console.log('RESULT:', JSON.stringify(errorResult));
+        return errorResult;
+    } finally {
+        await browser.close();
+    }
+}
+
+// Platform detection function
+async function detectPlatform(page) {
+    const url = page.url();
+    const title = await page.title();
+    
+    // Check URL patterns for known ATS platforms
+    if (url.includes('workday.com') || url.includes('myworkdayjobs.com')) {
+        return 'workday';
+    }
+    if (url.includes('greenhouse.io') || url.includes('boards.greenhouse.io')) {
+        return 'greenhouse';
+    }
+    if (url.includes('bamboohr.com') || url.includes('bamboohr.co')) {
+        return 'bamboohr';
+    }
+    if (url.includes('lever.co') || title.includes('Lever')) {
+        return 'lever';
+    }
+    if (url.includes('smartrecruiters.com')) {
+        return 'smartrecruiters';
+    }
+    if (url.includes('jobvite.com')) {
+        return 'jobvite';
+    }
+    if (url.includes('icims.com')) {
+        return 'icims';
+    }
+    if (url.includes('taleo.net') || url.includes('taleo.com')) {
+        return 'taleo';
+    }
+    
+    // Check for platform-specific DOM elements
+    const platformIndicators = await page.evaluate(() => {
+        const body = document.body.innerHTML.toLowerCase();
+        const url = window.location.href.toLowerCase();
+        
+        // More specific platform detection to avoid false positives
+        if ((body.includes('workday') && url.includes('workday')) || 
+            (document.querySelector('[data-automation-id]') && url.includes('workday'))) {
+            return 'workday';
+        }
+        if (body.includes('greenhouse') || document.querySelector('.greenhouse')) return 'greenhouse';
+        if (body.includes('bamboohr') || document.querySelector('[data-bamboo]')) return 'bamboohr';
+        if (body.includes('lever') || document.querySelector('.lever')) return 'lever';
+        if (body.includes('paylocity') || url.includes('paylocity')) return 'paylocity';
+        return 'unknown';
+    });
+    
+    return platformIndicators !== 'unknown' ? platformIndicators : 'custom';
+}
+
+// Navigation attempt function with platform-specific logic
+async function attemptNavigation(page, platform) {
+    let selectors = [];
+    
+    // Platform-specific apply button selectors
+    switch (platform) {
+        case 'workday':
+            selectors = [
+                '[data-automation-id="applySingleJobButton"]',
+                '[data-automation-id="jobApplyButton"]',
+                'button[data-automation-id]:has-text("Apply")',
+                'a[data-automation-id]:has-text("Apply")',
+                'button:has-text("Apply for Job")',
+                'a:has-text("Apply for Job")'
+            ];
+            break;
+        case 'greenhouse':
+            selectors = [
+                '.application-button',
+                '#submit_app',
+                'a:has-text("Submit Application")'
+            ];
+            break;
+        case 'bamboohr':
+            selectors = [
+                '.bamboo-apply-btn',
+                'button:has-text("Apply Now")'
+            ];
+            break;
+        case 'lever':
+            selectors = [
+                '.postings-btn',
+                'a:has-text("Apply for this job")'
+            ];
+            break;
+        case 'paylocity':
+            selectors = [
+                'a:has-text("Apply")',
+                'button:has-text("Apply")',
+                'a[href*="/Apply"]',
+                '.apply-btn'
+            ];
+            break;
+        default:
+            // Generic selectors for unknown platforms
+            selectors = [
+                'button:has-text("Apply")',
+                'a:has-text("Apply")',
+                'button:has-text("Apply Now")',
+                'a:has-text("Apply Now")',
+                'button:has-text("Apply for this job")',
+                'a:has-text("Apply for this job")',
+                'input[value*="Apply"]',
+                '[data-testid*="apply"]',
+                '.apply-button',
+                '#apply-button',
+                '.btn-apply',
+                'button[class*="apply"]',
+                'a[class*="apply"]',
+                'button:has-text("Submit Application")',
+                'a:has-text("Submit Application")',
+                'button:has-text("Continue")',
+                'button:has-text("Next")',
+                'button:has-text("Get Started")'
+            ];
+    }
+    
+    for (const selector of selectors) {
+        try {
+            const element = await page.locator(selector).first();
+            if (await element.isVisible({ timeout: 1000 })) {
+                console.log('Clicking navigation element:', selector);
+                await element.click();
+                try {
+                    await page.waitForLoadState('networkidle', { timeout: 8000 });
+                } catch (e) {
+                    // Fallback to domcontentloaded if networkidle times out
+                    await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+                    await page.waitForTimeout(2000);
+                }
+                return true;
+            }
+        } catch (e) {
+            // Continue to next selector
+        }
+    }
+    
+    return false;
+}
+
+// Check for application form fields
+async function checkForApplicationFields(page) {
+    return await page.evaluate(() => {
+        const inputs = document.querySelectorAll('input, select, textarea');
+        
+        // Traditional field patterns
+        const applicationFieldPatterns = [
+            /first.*name/i, /last.*name/i, /email/i, /phone/i, /resume/i,
+            /cover.*letter/i, /experience/i, /education/i, /skills/i
+        ];
+        
+        // Check for traditional named fields first
+        for (const input of inputs) {
+            const name = input.name || '';
+            const id = input.id || '';
+            const placeholder = input.placeholder || '';
+            const label = input.labels?.[0]?.textContent || '';
+            
+            const text = (name + ' ' + id + ' ' + placeholder + ' ' + label).toLowerCase();
+            
+            if (applicationFieldPatterns.some(pattern => pattern.test(text))) {
+                return true;
+            }
+        }
+        
+        // ENHANCEMENT: If no traditional fields found, check for modern SPA patterns
+        
+        // Check for significant number of visible text inputs (likely application form)
+        const visibleTextInputs = Array.from(inputs).filter(input => {
+            if (input.type === 'hidden' || input.type === 'submit' || input.type === 'button') {
+                return false;
+            }
+            const rect = input.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0; // Visible
+        });
+        
+        // If we have 5+ visible inputs, likely an application form
+        if (visibleTextInputs.length >= 5) {
+            console.log('Detected application form based on input count:', visibleTextInputs.length);
+            return true;
+        }
+        
+        // Check for specific application page indicators in URL or page content
+        const url = window.location.href.toLowerCase();
+        if (url.includes('/apply') || url.includes('application')) {
+            console.log('Detected application page from URL pattern');
+            return true;
+        }
+        
+        // Check for application-specific buttons/text
+        const pageText = document.body.textContent.toLowerCase();
+        const applicationIndicators = [
+            'upload resume', 'submit application', 'apply now', 'application form',
+            'personal information', 'work experience', 'cover letter'
+        ];
+        
+        for (const indicator of applicationIndicators) {
+            if (pageText.includes(indicator)) {
+                console.log('Detected application page from content:', indicator);
+                return true;
+            }
+        }
+        
+        return false;
+    });
+}
+
+// Enhanced form extraction with better JavaScript site support
+async function extractFormElements(page) {
+    return await page.evaluate(() => {
+        const formElements = [];
+        
+        // Find all forms
+        const forms = document.querySelectorAll('form');
+        
+        forms.forEach((form, formIndex) => {
+            // Get all input, select, textarea elements in this form
+            const inputs = form.querySelectorAll('input, select, textarea');
+            
+            inputs.forEach((element) => {
+                if (element.type === 'hidden' || element.type === 'submit' || element.type === 'button') {
+                    return; // Skip these
+                }
+                
+                const elementData = {
+                    form_index: formIndex,
+                    tag: element.tagName.toLowerCase(),
+                    type: element.type || element.tagName.toLowerCase(),
+                    name: element.name || '',
+                    id: element.id || '',
+                    className: element.className || '',
+                    placeholder: element.placeholder || '',
+                    required: element.required || false,
+                    value: element.value || '',
+                    label: ''
+                };
+                
+                // Try to find associated label
+                if (element.id) {
+                    const label = document.querySelector('label[for="' + element.id + '"]');
+                    if (label) {
+                        elementData.label = label.textContent ? label.textContent.trim() : '';
+                    }
+                }
+                
+                // If no label found, look for nearby text
+                if (!elementData.label) {
+                    const parent = element.closest('div, p, td, th');
+                    if (parent) {
+                        const texts = Array.from(parent.childNodes)
+                            .filter(node => node.nodeType === 3) // TEXT_NODE
+                            .map(node => node.textContent ? node.textContent.trim() : '')
+                            .filter(text => text && text.length > 2);
+                        if (texts.length > 0) {
+                            elementData.label = texts[0];
+                        }
+                    }
+                }
+                
+                // For select elements, get options
+                if (element.tagName === 'SELECT') {
+                    elementData.options = Array.from(element.options)
+                        .map(option => option.text)
+                        .filter(text => text.trim());
+                }
+                
+                formElements.push(elementData);
+            });
+        });
+        
+        // ENHANCEMENT: Also look for input elements outside of forms (common in SPA/JavaScript apps)
+        if (formElements.length === 0) {
+            console.log('No forms found, checking for standalone input elements...');
+            
+            // Look for all visible input elements not in forms
+            const standaloneInputs = document.querySelectorAll('input:not(form input), select:not(form select), textarea:not(form textarea)');
+            
+            standaloneInputs.forEach((element, index) => {
+                // Skip hidden, submit, button types
+                if (element.type === 'hidden' || element.type === 'submit' || element.type === 'button') {
+                    return;
+                }
+                
+                // Only include visible elements
+                const rect = element.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) {
+                    return;
+                }
+                
+                const elementData = {
+                    form_index: -1, // Indicate not in a form
+                    tag: element.tagName.toLowerCase(),
+                    type: element.type || element.tagName.toLowerCase(),
+                    name: element.name || element.id || 'standalone_' + index,
+                    id: element.id || '',
+                    className: element.className || '',
+                    placeholder: element.placeholder || '',
+                    required: element.required || false,
+                    value: element.value || '',
+                    label: ''
+                };
+                
+                // Try to find associated label
+                if (element.id) {
+                    const label = document.querySelector('label[for="' + element.id + '"]');
+                    if (label) {
+                        elementData.label = label.textContent ? label.textContent.trim() : '';
+                    }
+                }
+                
+                // Look for nearby text if no label
+                if (!elementData.label && element.parentElement) {
+                    const parentText = element.parentElement.textContent;
+                    if (parentText && parentText.length < 100) {
+                        elementData.label = parentText.trim();
+                    }
+                }
+                
+                formElements.push(elementData);
+            });
+            
+            if (formElements.length > 0) {
+                console.log('Found ' + formElements.length + ' standalone input elements');
+            }
+        }
+        
+        return formElements;
+    });
+}
+
+// Check for captcha
+async function checkForCaptcha(page) {
+    return await page.evaluate(() => {
+        const captchaSelectors = [
+            '[class*="captcha"]',
+            '[id*="captcha"]',
+            '[class*="recaptcha"]',
+            '[id*="recaptcha"]',
+            'iframe[src*="recaptcha"]',
+            'iframe[src*="hcaptcha"]'
+        ];
+        
+        return captchaSelectors.some(selector => {
+            return document.querySelector(selector) !== null;
+        });
+    });
+}
+
+// Check for multi-step flow indicators
+async function checkForMultiStep(page) {
+    return await page.evaluate(() => {
+        const multiStepIndicators = {
+            has_steps: false,
+            current_step: null,
+            total_steps: null,
+            step_titles: []
+        };
+        
+        // Look for step indicators
+        const stepSelectors = [
+            '.step', '.steps', '[class*="step"]',
+            '.progress', '[class*="progress"]',
+            '.wizard', '[class*="wizard"]'
+        ];
+        
+        for (const selector of stepSelectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+                multiStepIndicators.has_steps = true;
+                
+                // Try to extract step information
+                elements.forEach(el => {
+                    const text = el.textContent?.trim();
+                    if (text && text.match(/\d+.*\d+/)) { // Pattern like "1 of 3" or "Step 2/4"
+                        const matches = text.match(/(\d+).*?(\d+)/);
+                        if (matches) {
+                            multiStepIndicators.current_step = parseInt(matches[1]);
+                            multiStepIndicators.total_steps = parseInt(matches[2]);
+                        }
+                    }
+                    if (text && text.length > 0 && text.length < 50) {
+                        multiStepIndicators.step_titles.push(text);
+                    }
+                });
+                break;
+            }
+        }
+        
+        return multiStepIndicators;
+    });
+}
+
+// Run the enhanced analysis
+analyzeJobApplicationWithNavigation();
+JAVASCRIPT;
+    }
+    
+    /**
+     * Build Playwright script for form submission
+     */
+    protected function buildFormSubmissionScript(array $sessionData, int $userId): string
+    {
+        $jobUrl = $sessionData['job_url'];
+        $formData = $sessionData['form_data'] ?? [];
+        $userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+        
+        // Get user's resume file path
+        $resumePath = $this->getUserResumeFilePath($userId);
+        
+        // Convert form data to JSON for script
+        $formDataJson = json_encode($formData, JSON_UNESCAPED_SLASHES);
+        
+        return <<<JAVASCRIPT
+const { chromium } = require('playwright');
+
+async function submitJobApplication() {
+    // Using Chromium for better Docker stability
+    const browser = await chromium.launch({ 
+        headless: true,
+        executablePath: '/root/.cache/ms-playwright/chromium-1187/chrome-linux/chrome',
+        args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-setuid-sandbox',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--no-first-run',
+            '--disable-default-apps',
+            '--disable-popup-blocking',
+            '--disable-translate',
+            '--disable-background-timer-throttling',
+            '--disable-renderer-backgrounding',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-ipc-flooding-protection'
+        ]
+    });
+    
+    const context = await browser.newContext({
+        userAgent: '{$userAgent}',
+        viewport: { width: 1366, height: 768 }
+    });
+    
+    const page = await context.newPage();
+    
+    // Basic stealth to avoid simple detection
+    await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+        });
+        window.chrome = {
+            runtime: {},
+            loadTimes: function() {},
+            csi: function() {},
+        };
+    });
+    
+    try {
+        console.log('Starting form submission for: {$jobUrl}');
+        
+        // Navigate to job application page
+        await page.goto('{$jobUrl}', { 
+            waitUntil: 'domcontentloaded',
+            timeout: 30000 
+        });
+        
+        console.log('Page loaded, waiting for forms...');
+        await page.waitForTimeout(2000);
+        
+        const formData = {$formDataJson};
+        console.log('Form data loaded:', Object.keys(formData));
+        
+        // Helper function to fill a field with human-like behavior
+        async function fillFieldIfExists(selectors, value, fieldName) {
+            if (!value) return false;
+            
+            for (const selector of selectors) {
+                try {
+                    const element = await page.locator(selector).first();
+                    if (await element.isVisible({ timeout: 1000 })) {
+                        // Human-like interaction: hover, click, then type
+                        await element.hover();
+                        await page.waitForTimeout(100 + Math.random() * 200);
+                        
+                        // Clear any existing content first
+                        await element.click({ clickCount: 3 }); // Triple click to select all
+                        await page.waitForTimeout(50 + Math.random() * 100);
+                        
+                        // Simple fast typing - avoid complex logic that might hang
+                        const text = value.toString();
+                        await element.fill(text);
+                        await page.waitForTimeout(100);
+                        
+                        console.log(`Filled \${fieldName}: \${selector}`);
+                        await page.waitForTimeout(200 + Math.random() * 500);
+                        return true;
+                    }
+                } catch (e) {
+                    // Continue to next selector
+                }
+            }
+            console.log(`Could not fill \${fieldName}`);
+            return false;
+        }
+        
+        // Helper function to select dropdown option with human-like behavior
+        async function selectDropdownOption(selectors, value, fieldName) {
+            if (!value) return false;
+            
+            for (const selector of selectors) {
+                try {
+                    const element = await page.locator(selector).first();
+                    if (await element.isVisible({ timeout: 1000 })) {
+                        // Human-like interaction: hover first, pause, then interact
+                        await element.hover();
+                        await page.waitForTimeout(200 + Math.random() * 400);
+                        
+                        // Click to open dropdown (human behavior)
+                        await element.click();
+                        await page.waitForTimeout(300 + Math.random() * 500);
+                        
+                        // Select the option
+                        await element.selectOption(value.toString());
+                        console.log(`Selected \${fieldName}: \${value}`);
+                        
+                        // Brief pause after selection
+                        await page.waitForTimeout(400 + Math.random() * 600);
+                        return true;
+                    }
+                } catch (e) {
+                    // Continue to next selector
+                }
+            }
+            return false;
+        }
+        
+        // Fill all form fields with human-like pacing
+        console.log('Filling form fields with natural timing...');
+        
+        // Basic fields with random pauses between (simulate thinking)
+        await fillFieldIfExists([
+            'input[name="firstName"]', 'input[name="first_name"]', 'input[name="firstname"]'
+        ], formData.first_name, 'first_name');
+        await page.waitForTimeout(100 + Math.random() * 200); // Fast for UX
+        
+        await fillFieldIfExists([
+            'input[name="lastName"]', 'input[name="last_name"]', 'input[name="lastname"]'
+        ], formData.last_name, 'last_name');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        await fillFieldIfExists([
+            'input[type="email"]', 'input[name="email"]'
+        ], formData.email, 'email');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        await fillFieldIfExists([
+            'input[type="tel"]', 'input[name="phone"]'
+        ], formData.phone, 'phone');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        // Address fields (fast for UX)
+        await fillFieldIfExists([
+            'input[name="streetAddress"]', 'input[name="address"]', 'input[name="street"]'
+        ], formData.streetAddress, 'streetAddress');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        await fillFieldIfExists([
+            'input[name="city"]'
+        ], formData.city, 'city');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        await selectDropdownOption([
+            'select[name="state"]'
+        ], formData.state, 'state');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        await fillFieldIfExists([
+            'input[name="zip"]', 'input[name="zipCode"]', 'input[name="postal_code"]'
+        ], formData.zip, 'zip');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        await selectDropdownOption([
+            'select[name="countryId"]', 'select[name="country"]'
+        ], formData.countryId, 'countryId');
+        await page.waitForTimeout(100 + Math.random() * 200);
+        
+        // Optional fields
+        await fillFieldIfExists([
+            'input[name="dateAvailable"]'
+        ], formData.dateAvailable, 'dateAvailable');
+        
+        await fillFieldIfExists([
+            'input[name="desiredPay"]', 'input[name="salary"]'
+        ], formData.desiredPay, 'desiredPay');
+        
+        await fillFieldIfExists([
+            'input[name="websiteUrl"]', 'input[name="website"]'
+        ], formData.websiteUrl, 'websiteUrl');
+        
+        await fillFieldIfExists([
+            'input[name="linkedinUrl"]', 'input[name="linkedin"]'
+        ], formData.linkedinUrl, 'linkedinUrl');
+        
+        // Custom questions (BambooHR format)
+        for (const [key, value] of Object.entries(formData)) {
+            if (key.startsWith('customQuestions[')) {
+                await fillFieldIfExists([
+                    `textarea[name="\${key}"]`,
+                    `input[name="\${key}"]`
+                ], value, key);
+            }
+        }
+        
+        // Enhanced resume upload with multiple selector strategies
+        const resumeFilePath = '{$resumePath}';
+        if (resumeFilePath && fs.existsSync(resumeFilePath)) {
+            console.log('Uploading resume:', resumeFilePath);
+            
+            // Comprehensive list of resume upload selectors
+            const resumeSelectors = [
+                'input[type="file"]',
+                'input[accept*="pdf"]',
+                'input[accept*=".pdf"]',
+                'input[accept*="application/pdf"]',
+                'input[name*="resume"]',
+                'input[name*="cv"]',
+                'input[id*="resume"]',
+                'input[id*="cv"]',
+                '#resume',
+                '#cv',
+                '.resume-upload',
+                '.cv-upload',
+                '[data-automation-id*="resume"]',
+                '[data-testid*="resume"]',
+                'input[accept*="doc"]',
+                'input[accept*="docx"]'
+            ];
+            
+            let uploadSuccess = false;
+            
+            for (const selector of resumeSelectors) {
+                try {
+                    console.log(`Trying resume upload selector: \${selector}`);
+                    const fileInput = await page.locator(selector).first();
+                    
+                    if (await fileInput.isVisible({ timeout: 1000 })) {
+                        console.log(`Found visible file input: \${selector}`);
+                        
+                        // Human-like interaction before upload
+                        await fileInput.hover();
+                        await page.waitForTimeout(300 + Math.random() * 500);
+                        
+                        // Scroll the element into view if needed
+                        await fileInput.scrollIntoViewIfNeeded();
+                        await page.waitForTimeout(200);
+                        
+                        // Upload the file
+                        await fileInput.setInputFiles(resumeFilePath);
+                        console.log('Resume file uploaded successfully');
+                        
+                        // Wait for upload to process and check for success indicators
+                        await page.waitForTimeout(2000 + Math.random() * 1000);
+                        
+                        // Look for upload success indicators
+                        const uploadIndicators = await page.evaluate(() => {
+                            const indicators = [];
+                            
+                            // Check for file name display
+                            const fileNameElements = document.querySelectorAll('[class*="filename"], [class*="file-name"], .upload-filename');
+                            for (const el of fileNameElements) {
+                                if (el.textContent.includes('.pdf') || el.textContent.includes('Resume')) {
+                                    indicators.push('filename_displayed');
+                                    break;
+                                }
+                            }
+                            
+                            // Check for upload progress/success messages
+                            const successElements = document.querySelectorAll('[class*="success"], [class*="uploaded"], [class*="complete"]');
+                            for (const el of successElements) {
+                                if (el.offsetParent !== null && el.textContent.trim()) {
+                                    indicators.push('success_message');
+                                    break;
+                                }
+                            }
+                            
+                            // Check if file input is now disabled or hidden (common after upload)
+                            const fileInputs = document.querySelectorAll('input[type="file"]');
+                            for (const input of fileInputs) {
+                                if (input.disabled || input.style.display === 'none') {
+                                    indicators.push('input_disabled');
+                                    break;
+                                }
+                            }
+                            
+                            return indicators;
+                        });
+                        
+                        if (uploadIndicators.length > 0) {
+                            console.log('Upload success indicators found:', uploadIndicators);
+                            uploadSuccess = true;
+                            break;
+                        } else {
+                            console.log('Upload completed but no clear success indicators');
+                            uploadSuccess = true; // Assume success if no errors
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.log(`Resume upload selector \${selector} failed: \${e.message}`);
+                    continue;
+                }
+            }
+            
+            if (!uploadSuccess) {
+                console.log('Warning: Could not find any file upload inputs for resume');
+                
+                // Try alternative approach: look for upload buttons or areas
+                const uploadAreaSelectors = [
+                    '.dropzone',
+                    '.upload-area',
+                    '.file-drop',
+                    '[class*="drag"]',
+                    '[class*="drop"]'
+                ];
+                
+                for (const selector of uploadAreaSelectors) {
+                    try {
+                        const uploadArea = await page.locator(selector).first();
+                        if (await uploadArea.isVisible({ timeout: 1000 })) {
+                            console.log(`Found upload area: \${selector} - but cannot upload programmatically`);
+                            break;
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+            } else {
+                console.log('Resume upload completed successfully');
+            }
+        } else {
+            console.log('No resume file path provided or file does not exist');
+        }
+        
+        // Wait for any auto-save or validation
+        await page.waitForTimeout(3000);
+        
+        // Check for captcha before submission
+        const hasCaptcha = await page.evaluate(() => {
+            const captchaSelectors = [
+                '.g-recaptcha', '.h-captcha', '[data-sitekey]',
+                'iframe[src*="recaptcha"]', 'iframe[src*="hcaptcha"]'
+            ];
+            return captchaSelectors.some(selector => {
+                const element = document.querySelector(selector);
+                return element && element.offsetParent !== null;
+            });
+        });
+        
+        if (hasCaptcha) {
+            console.log('CAPTCHA detected - cannot proceed with automatic submission');
+            await browser.close();
+            return {
+                success: false,
+                error: 'CAPTCHA detected - manual intervention required',
+                requires_captcha: true
+            };
+        }
+        
+        // Find and click submit button
+        console.log('Looking for submit button...');
+        
+        const submitSelectors = [
+            'button:has-text("Submit Application")',
+            'button:has-text("Submit")',
+            'input[type="submit"]',
+            'button[type="submit"]',
+            'a:has-text("Submit Application")',
+            '.MuiButton-root:has-text("Submit Application")',
+            'button.js-SiteFooter__action--primary',
+            'button[data-fabric-component="Button"]:has-text("Submit")'
+        ];
+        
+        let submitButtonFound = false;
+        let submitError = null;
+        
+        for (const selector of submitSelectors) {
+            try {
+                const submitButton = await page.locator(selector).first();
+                if (await submitButton.isVisible({ timeout: 2000 })) {
+                    console.log(`Found submit button: \${selector}`);
+                    
+                    // Human-like submission behavior (reduced delays)
+                    await submitButton.scrollIntoViewIfNeeded();
+                    await page.waitForTimeout(300 + Math.random() * 500); // Reduced pause
+                    
+                    // Hover over button first (human behavior)
+                    await submitButton.hover();
+                    await page.waitForTimeout(200 + Math.random() * 400); // Reduced pause
+                    
+                    // Move mouse away and back (realistic hesitation)
+                    await page.mouse.move(
+                        Math.random() * 50, 
+                        Math.random() * 50
+                    );
+                    await page.waitForTimeout(100 + Math.random() * 300);
+                    
+                    await submitButton.hover();
+                    await page.waitForTimeout(100 + Math.random() * 200);
+                    
+                    // Finally click the submit button
+                    await submitButton.click();
+                    console.log('Submit button clicked successfully');
+                    submitButtonFound = true;
+                    break;
+                }
+            } catch (e) {
+                console.log(`Submit button selector failed: \${selector} - \${e.message}`);
+                submitError = e.message;
+            }
+        }
+        
+        if (!submitButtonFound) {
+            await browser.close();
+            return {
+                success: false,
+                error: `Could not find submit button. Last error: \${submitError}`,
+                requires_captcha: false
+            };
+        }
+        
+        // Wait for submission to process
+        console.log('Waiting for submission to complete...');
+        await page.waitForTimeout(5000);
+        
+        // Check for success indicators
+        const finalUrl = page.url();
+        console.log('Final URL:', finalUrl);
+        
+        // Check for errors first (permissions, validation, etc.)
+        const errorDetection = await page.evaluate(() => {
+            const jsErrors = [];
+            const pageSource = document.documentElement.outerHTML;
+            
+            // Check for BambooHR-specific error patterns in the page source
+            if (pageSource.includes('DEFAULT_ERROR_MESSAGE') && 
+                pageSource.includes('Uh oh, something went wrong')) {
+                jsErrors.push('BambooHR Error: Something went wrong - likely permission or validation error');
+            }
+            
+            if (pageSource.includes('DEFAULT_PERMISSIONS_ERROR_MESSAGE') && 
+                pageSource.includes('You do not have sufficient permissions')) {
+                jsErrors.push('BambooHR Permission Error: Insufficient permissions for this action');
+            }
+            
+            // Check if we're still on the same form (not redirected to success page)
+            const formElements = document.querySelectorAll('form, input[type="submit"], button[type="submit"]');
+            const hasForm = formElements.length > 0;
+            
+            // Check for visible error messages
+            const errorSelectors = [
+                '.error', '.alert-error', '.alert-danger', 
+                '[class*="error"]', '[class*="danger"]', '.validation-error',
+                '.form-error', '.field-error'
+            ];
+            
+            const visibleErrors = [];
+            for (const selector of errorSelectors) {
+                const elements = document.querySelectorAll(selector);
+                for (const element of elements) {
+                    if (element.offsetParent !== null) { // visible
+                        const text = element.textContent.trim();
+                        if (text.length > 0) {
+                            visibleErrors.push(text);
+                        }
+                    }
+                }
+            }
+            
+            // Additional check: if URL hasn't changed and form is still present, likely failed
+            const urlIndicatesError = window.location.href.includes('/careers/') && hasForm;
+            
+            return {
+                jsErrors: jsErrors,
+                visibleErrors: visibleErrors,
+                stillHasForm: hasForm,
+                urlIndicatesError: urlIndicatesError,
+                currentUrl: window.location.href,
+                hasErrors: jsErrors.length > 0 || visibleErrors.length > 0 || urlIndicatesError
+            };
+        });
+        
+        // If errors detected, fail immediately
+        if (errorDetection.hasErrors) {
+            await browser.close();
+            return {
+                success: false,
+                error: 'Form submission failed with errors: ' + JSON.stringify(errorDetection),
+                final_url: finalUrl,
+                confirmation_detected: false
+            };
+        }
+        
+        // Look for confirmation message or success page
+        const confirmationMessage = await page.evaluate(() => {
+            const confirmationSelectors = [
+                '.success', '.confirmation', '.thank-you',
+                '[class*="success"]', '[class*="confirmation"]', '[class*="thank"]',
+                'h1', 'h2', 'h3', '.alert-success', '.message'
+            ];
+            
+            for (const selector of confirmationSelectors) {
+                const elements = document.querySelectorAll(selector);
+                for (const element of elements) {
+                    const text = element.textContent.toLowerCase();
+                    if (text.includes('thank') || text.includes('success') || 
+                        text.includes('received') || text.includes('submitted') ||
+                        text.includes('confirmation') || text.includes('applied')) {
+                        return element.textContent.trim();
+                    }
+                }
+            }
+            return null;
+        });
+        
+        // Look for confirmation number
+        const confirmationNumber = await page.evaluate(() => {
+            const text = document.body.textContent;
+            const matches = text.match(/(?:confirmation|reference|application)\\s*(?:number|id|code)\\s*:?\\s*([A-Z0-9-]+)/i);
+            return matches ? matches[1] : null;
+        });
+        
+        const isSuccessPage = finalUrl.includes('confirmation') || 
+                            finalUrl.includes('success') || 
+                            finalUrl.includes('thank') ||
+                            confirmationMessage !== null;
+        
+        await browser.close();
+        
+        if (isSuccessPage || confirmationMessage) {
+            return {
+                success: true,
+                confirmation_message: confirmationMessage || 'Application submitted successfully',
+                confirmation_number: confirmationNumber,
+                final_url: finalUrl,
+                confirmation_detected: true
+            };
+        } else {
+            return {
+                success: false,
+                error: 'No confirmation detected after submission',
+                final_url: finalUrl,
+                confirmation_detected: false
+            };
+        }
+        
+    } catch (error) {
+        await browser.close();
+        console.error('Form submission failed:', error);
+        return {
+            success: false,
+            error: `Form submission failed: \${error.message}`,
+            requires_captcha: false
+        };
+    }
+}
+
+// Run the submission
+submitJobApplication().then(result => {
+    console.log('RESULT:', JSON.stringify(result));
+}).catch(error => {
+    console.error('Script error:', error);
+    console.log('RESULT:', JSON.stringify({
+        success: false,
+        error: `Script execution failed: \${error.message}`
+    }));
+});
+JAVASCRIPT;
+    }
+    
+    /**
+     * Get user's resume file path for upload
+     */
+    protected function getUserResumeFilePath(int $userId): string
+    {
+        try {
+            $user = \App\Models\User::find($userId);
+            if (!$user) {
+                return '';
+            }
+            
+            $resume = $user->parsedResumes()->first();
+            if (!$resume || !$resume->file_path) {
+                return '';
+            }
+            
+            $fullPath = storage_path('app/' . $resume->file_path);
+            if (file_exists($fullPath)) {
+                return $fullPath;
+            }
+            
+            return '';
+        } catch (Exception $e) {
+            Log::error('Failed to get user resume path', [
+                'user_id' => $userId,
+                'error' => $e->getMessage()
+            ]);
+            return '';
+        }
+    }
+    
+    protected function analyzeFormsWithLLM(array $forms, array $navigationResult = []): array
+    {
+        // COST OPTIMIZATION: Check if we can skip LLM based on platform detection
+        $platformDetected = $navigationResult['platform_detected'] ?? 'unknown';
+        
+        if ($platformDetected !== 'unknown' && $platformDetected !== 'custom') {
+            Log::info('Using platform-specific analysis instead of LLM', [
+                'platform' => $platformDetected,
+                'forms_count' => count($forms)
+            ]);
+            
+            return $this->getPlatformSpecificAnalysis($platformDetected, $forms);
+        }
+        
+        // COST OPTIMIZATION: Check for simple forms that don't need LLM
+        if (count($forms) <= 2 && $this->isSimpleSearchForm($forms)) {
+            Log::info('Skipping LLM for simple search form', [
+                'forms_count' => count($forms)
+            ]);
+            
+            return $this->getSimpleFormAnalysis($forms);
+        }
+        
+        $prompt = $this->buildFormAnalysisPrompt($forms);
+        
+        try {
+            Log::info('Sending form analysis to OpenAI (no optimization available)', [
+                'forms_count' => count($forms),
+                'prompt_length' => strlen($prompt),
+                'platform' => $platformDetected
+            ]);
+            
+            $response = OpenAI::chat()->create([
+                'model' => 'gpt-4',
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are an expert at analyzing job application forms. Analyze the provided form elements and return semantic field mappings in valid JSON format. Always return valid JSON.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => $prompt
+                    ]
+                ],
+                'temperature' => 0.1, // Low temperature for consistent analysis
+                'max_tokens' => 2000,
+                // Remove response_format for compatibility
+            ]);
+            
+            $content = $response->choices[0]->message->content;
+            
+            // Try to parse JSON directly first
+            $analysis = json_decode($content, true);
+            
+            // If that fails, try to extract JSON from markdown code blocks
+            if (!$analysis && preg_match('/```json\s*(.*?)\s*```/s', $content, $matches)) {
+                $jsonContent = $matches[1];
+                $analysis = json_decode($jsonContent, true);
+            }
+            
+            // If still no luck, try to extract any JSON object from the response
+            if (!$analysis && preg_match('/\{.*\}/s', $content, $matches)) {
+                $analysis = json_decode($matches[0], true);
+            }
+            
+            if (!$analysis) {
+                Log::warning('Failed to parse OpenAI response as JSON', [
+                    'response' => substr($content, 0, 500),
+                    'json_error' => json_last_error_msg()
+                ]);
+                throw new Exception('Failed to parse OpenAI response as JSON: ' . json_last_error_msg());
+            }
+            
+            Log::info('OpenAI form analysis completed', [
+                'platform_name' => $analysis['platform_name'] ?? 'Unknown',
+                'fields_mapped' => count($analysis['field_mappings'] ?? [])
+            ]);
+            
+            return $analysis;
+            
+        } catch (Exception $e) {
+            Log::error('OpenAI form analysis failed', [
+                'error' => $e->getMessage(),
+                'forms_count' => count($forms)
+            ]);
+            
+            // Return fallback analysis
+            return [
+                'platform_name' => 'Unknown',
+                'field_mappings' => $this->getFallbackFieldMappings($forms),
+                'validation_rules' => [],
+                'submission_flow' => ['single_page'],
+                'analysis_error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Build the prompt for OpenAI form analysis
+     */
+    protected function buildFormAnalysisPrompt(array $forms): string
+    {
+        $formData = json_encode($forms, JSON_PRETTY_PRINT);
+        
+        return <<<PROMPT
+Analyze these job application form elements and return only valid JSON:
+
+{$formData}
+
+Return JSON with this exact structure (no explanations, just JSON):
+{
+  "platform_name": "Unknown",
+  "field_mappings": {
+    "first_name": ["input[name='firstName']"],
+    "last_name": ["input[name='lastName']"],
+    "email": ["input[type='email']"],
+    "work_authorization": ["select[name*='authorized']"],
+    "resume_upload": ["input[type='file']"]
+  },
+  "validation_rules": {
+    "required_fields": ["first_name", "last_name", "email"]
+  },
+  "submission_flow": ["single_page"],
+  "has_captcha": false
+}
+
+Map the form elements to semantic field names. Return only the JSON object.
+PROMPT;
+    }
+    
+    /**
+     * Get fallback field mappings when OpenAI fails
+     */
+    protected function getFallbackFieldMappings(array $forms): array
+    {
+        return [
+            'first_name' => ['input[name="firstName"]', 'input[name="fname"]', '#first-name'],
+            'last_name' => ['input[name="lastName"]', 'input[name="lname"]', '#last-name'],
+            'email' => ['input[type="email"]', 'input[name="email"]'],
+            'phone' => ['input[type="tel"]', 'input[name="phone"]'],
+            'resume_upload' => ['input[type="file"]', 'input[accept*="pdf"]']
+        ];
+    }
+    
+    /**
+     * COST OPTIMIZATION: Platform-specific analysis without LLM
+     */
+    protected function getPlatformSpecificAnalysis(string $platform, array $forms): array
+    {
+        $platformMappings = [
+            'workday' => [
+                'platform_name' => 'Workday',
+                'field_mappings' => [
+                    'first_name' => ['[data-automation-id*="firstName"]', 'input[name*="firstName"]'],
+                    'last_name' => ['[data-automation-id*="lastName"]', 'input[name*="lastName"]'],
+                    'email' => ['[data-automation-id*="email"]', 'input[type="email"]'],
+                    'phone' => ['[data-automation-id*="phone"]', 'input[type="tel"]'],
+                    'resume_upload' => ['[data-automation-id*="resume"]', 'input[type="file"]']
+                ],
+                'validation_rules' => ['required_fields' => ['first_name', 'last_name', 'email']],
+                'submission_flow' => ['multi_step'],
+                'has_captcha' => false
+            ],
+            'greenhouse' => [
+                'platform_name' => 'Greenhouse',
+                'field_mappings' => [
+                    'first_name' => ['#first_name', 'input[name="first_name"]'],
+                    'last_name' => ['#last_name', 'input[name="last_name"]'],
+                    'email' => ['#email', 'input[name="email"]'],
+                    'phone' => ['#phone', 'input[name="phone"]'],
+                    'resume_upload' => ['#resume', 'input[name="resume"]']
+                ],
+                'validation_rules' => ['required_fields' => ['first_name', 'last_name', 'email']],
+                'submission_flow' => ['single_page'],
+                'has_captcha' => false
+            ],
+            'lever' => [
+                'platform_name' => 'Lever',
+                'field_mappings' => [
+                    'first_name' => ['input[name*="name"]', '.lever-name'],
+                    'email' => ['input[name*="email"]', '.lever-email'],
+                    'resume_upload' => ['input[type="file"]', '.lever-resume']
+                ],
+                'validation_rules' => ['required_fields' => ['first_name', 'email']],
+                'submission_flow' => ['single_page'],
+                'has_captcha' => false
+            ]
+        ];
+        
+        return $platformMappings[$platform] ?? $this->getGenericAnalysis($forms);
+    }
+    
+    /**
+     * COST OPTIMIZATION: Check if forms are simple search forms
+     */
+    protected function isSimpleSearchForm(array $forms): bool
+    {
+        foreach ($forms as $form) {
+            $name = strtolower($form['name'] ?? '');
+            $type = strtolower($form['type'] ?? '');
+            
+            // If we see typical application fields, it's not a simple search form
+            if (in_array($type, ['email', 'tel', 'file']) || 
+                strpos($name, 'name') !== false || 
+                strpos($name, 'phone') !== false ||
+                strpos($name, 'resume') !== false) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * COST OPTIMIZATION: Analysis for simple search forms
+     */
+    protected function getSimpleFormAnalysis(array $forms): array
+    {
+        return [
+            'platform_name' => 'Job Search Portal',
+            'field_mappings' => [
+                'job_search' => ['input[name*="q"]', 'input[name*="search"]'],
+                'location_search' => ['input[name*="location"]', 'input[name*="where"]'],
+                'department_filter' => ['select[name*="department"]'],
+                'job_type_filter' => ['select[name*="type"]']
+            ],
+            'validation_rules' => ['required_fields' => []],
+            'submission_flow' => ['search_only'],
+            'has_captcha' => false,
+            'is_application_form' => false
+        ];
+    }
+    
+    /**
+     * Generic analysis for unknown platforms
+     */
+    protected function getGenericAnalysis(array $forms): array
+    {
+        return [
+            'platform_name' => 'Custom Platform',
+            'field_mappings' => $this->getFallbackFieldMappings($forms),
+            'validation_rules' => ['required_fields' => ['first_name', 'last_name', 'email']],
+            'submission_flow' => ['single_page'],
+            'has_captcha' => false
+        ];
+    }
+}

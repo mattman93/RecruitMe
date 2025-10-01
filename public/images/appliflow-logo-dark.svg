@@ -1,0 +1,21 @@
+<svg width="200" height="40" viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0284c7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0369a1;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- AF Symbol with flow -->
+  <g transform="translate(5, 5)">
+    <!-- Stylized AF -->
+    <rect x="0" y="0" width="30" height="30" rx="8" fill="url(#logoGradient)"/>
+    <text x="15" y="23" font-family="Inter, system-ui, sans-serif" font-size="18" font-weight="bold" fill="white" text-anchor="middle">AF</text>
+    <!-- Flow element -->
+    <path d="M5 32 Q15 35 25 32" stroke="url(#logoGradient)" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+  
+  <!-- AppliFlow text - WHITE for dark mode -->
+  <text x="45" y="25" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="600" fill="#ffffff">AppliFlow</text>
+</svg>
