@@ -29,7 +29,7 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
-        @vite(['resources/js/index.css', 'resources/js/app.tsx', 'resources/js/main.tsx'])
+        @vite(['resources/js/index.css', 'resources/js/main.tsx'])
         
     </head>
     <body class="font-sans antialiased">
