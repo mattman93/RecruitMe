@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
-import { ArrowRight, Mail, User } from "lucide-react";
+import { ArrowRight, Mail, User, X } from "lucide-react";
 
 interface ContactUsProps {
   onClose?: () => void;
@@ -55,15 +55,34 @@ export function ContactUs({ onClose }: ContactUsProps) {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-8">
-        <div className="max-w-md w-full text-center space-y-6">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full text-center space-y-6 p-8 relative"
+             style={{
+               boxShadow: '0 0 40px rgba(147, 51, 234, 0.3), 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+             }}>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
           <div className="w-16 h-16 bg-[#F5F8FF] rounded-full flex items-center justify-center mx-auto">
             <Mail className="h-8 w-8 text-[#2D5BFF]" />
           </div>
           <h2 className="text-2xl font-bold text-[#1A1A1A]">You're On The List!</h2>
-          <p className="text-[#4A4A4A]">
-            Thanks for your interest in AppliFlow. We'll be in touch soon with updates about our launch and your early access benefits.
+          <p className="text-[#4A4A4A] leading-relaxed">
+            Thanks for your interest in AppliFlow! We'll be in touch soon with updates about our launch and your early access benefits.
           </p>
+          <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-lg p-4 text-left">
+            <p className="text-sm text-[#0369A1] font-medium">What happens next?</p>
+            <ul className="text-sm text-[#0369A1] mt-2 space-y-1">
+              <li>• You'll receive launch updates via email</li>
+              <li>• Early access invitation when we go live</li>
+              <li>• Premium features unlocked for life</li>
+            </ul>
+          </div>
           {onClose && (
             <Button onClick={onClose} className="bg-[#2D5BFF] hover:bg-[#1E3FCC] text-white">
               Continue
@@ -75,18 +94,45 @@ export function ContactUs({ onClose }: ContactUsProps) {
   }
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full space-y-8 p-8 relative max-h-[90vh] overflow-y-auto"
+           style={{
+             boxShadow: '0 0 40px rgba(147, 51, 234, 0.3), 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+           }}>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
         <div className="text-center">
           <div className="w-16 h-16 bg-[#F5F8FF] rounded-full flex items-center justify-center mx-auto mb-6">
             <Mail className="h-8 w-8 text-[#2D5BFF]" />
           </div>
           <h2 className="text-3xl font-bold text-[#1A1A1A] mb-4">Join Our Early Access</h2>
-          <p className="text-[#4A4A4A] leading-relaxed">
+          <p className="text-[#4A4A4A] leading-relaxed text-lg">
             Join our early user list to be among the first job seekers on the platform.
-            This will give you higher visibility to employers, higher FlowRank, lifetime access to paid features,
-            and early access to beta features.
           </p>
+          <div className="space-y-3 text-[#6B7280] text-sm pb-6" style={{ marginTop: '5%', marginLeft: '15%' }}>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-[#2D5BFF] rounded-full mr-3 flex-shrink-0"></div>
+              <span>Higher visibility to employers</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-[#2D5BFF] rounded-full mr-3 flex-shrink-0"></div>
+              <span>Increased FlowRank for better job matching</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-[#2D5BFF] rounded-full mr-3 flex-shrink-0"></div>
+              <span>Lifetime access to premium features</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-[#2D5BFF] rounded-full mr-3 flex-shrink-0"></div>
+              <span>Early access to beta features</span>
+            </div>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -149,17 +195,6 @@ export function ContactUs({ onClose }: ContactUsProps) {
             )}
           </Button>
         </form>
-
-        {onClose && (
-          <div className="text-center">
-            <button
-              onClick={onClose}
-              className="text-sm text-[#7A7A7A] hover:text-[#4A4A4A] transition-colors"
-            >
-              ← Back
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
