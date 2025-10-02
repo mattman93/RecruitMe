@@ -22,9 +22,11 @@
 
         <title inertia>{{ config('app.name', 'AppliFlow') }}</title>
 
-        <link rel="icon" href="/favicon.ico" sizes="any">
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="icon" href="/favicon-bold-256.png" type="image/png" sizes="256x256">
+        <link rel="icon" href="/favicon-bold-64.png" type="image/png" sizes="64x64">
+        <link rel="icon" href="/favicon-bold-32.png" type="image/png" sizes="32x32">
+        <link rel="shortcut icon" href="/favicon-bold-64.png" type="image/png">
+        <link rel="apple-touch-icon" href="/af-fav2.png">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />

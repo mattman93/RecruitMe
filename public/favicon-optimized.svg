@@ -1,0 +1,17 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark background circle -->
+  <circle cx="128" cy="128" r="128" fill="#1F2937"/>
+
+  <!-- Bold letter A in white -->
+  <path d="M128 60L180 190H155L145 165H111L101 190H76L128 60Z
+           M118 140H138L128 115L118 140Z"
+           fill="white"
+           stroke="white"
+           stroke-width="2"/>
+
+  <!-- Purple accent swoosh - simplified and bolder -->
+  <path d="M90 140C90 140 110 135 150 140C170 143 180 150 180 150L170 160C170 160 155 150 130 150C110 150 90 155 90 155L90 140Z"
+        fill="#8B5CF6"
+        stroke="#8B5CF6"
+        stroke-width="2"/>
+</svg>
