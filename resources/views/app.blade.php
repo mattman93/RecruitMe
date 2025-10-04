@@ -4,14 +4,6 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-         <script type="module">
-                import RefreshRuntime from 'http://localhost:5174/@react-refresh'; // Use your Vite port
-                RefreshRuntime.injectIntoGlobalHook(window);
-                window.$RefreshReg$ = () => {};
-                window.$RefreshSig$ = () => (type) => type;
-                window.__vite_plugin_react_preamble_installed__ = true;
-         </script>
-        
 
         {{-- Inline style to set the HTML background color --}}
         <style>
