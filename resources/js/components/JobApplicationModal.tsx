@@ -38,11 +38,15 @@ interface AutomationResult {
   status: string;
   filled_fields?: string[];
   session_id?: string;
+  lead_id?: number;
+  application_id?: number;
+  preferences_saved?: number;
   missing_fields?: Array<{
     semantic_field: string;
     label: string;
     type: string;
     required: boolean;
+    suggested_answer?: string;
     options?: Array<{
       value: string;
       label: string;
@@ -50,6 +54,7 @@ interface AutomationResult {
   }>;
   error?: string;
   requires_captcha?: boolean;
+  message?: string;
 }
 
 export function JobApplicationModal({ 
@@ -71,6 +76,7 @@ export function JobApplicationModal({
   const [missingFieldValues, setMissingFieldValues] = useState<Record<string, string>>({});
   const [showSkipButton, setShowSkipButton] = useState(false);
   const [isSubmittingMissingFields, setIsSubmittingMissingFields] = useState(false);
+  const [secondsUntilNext, setSecondsUntilNext] = useState(5);
 
   // Auto-scroll to modal when opened
   useEffect(() => {
@@ -119,7 +125,7 @@ export function JobApplicationModal({
 
   const handleAutomationResult = (result: AutomationResult) => {
     setAutomationResult(result);
-    
+
     // Handle different result statuses
     if (result.status === 'needs_user_input') {
       setMissingFields(result.missing_fields || []);
@@ -128,6 +134,34 @@ export function JobApplicationModal({
     } else if (result.status === 'ready_to_submit') {
       setSessionId(result.session_id || '');
       setAutomationState('ready_to_submit');
+    } else if (result.status === 'processing') {
+      // Backend is processing asynchronously, start polling
+      const sessionKey = (result as any).session_key;
+      if (sessionKey) {
+        pollAutomationStatus(sessionKey);
+      }
+    } else if (result.status === 'submitted') {
+      // Email-based application completed successfully
+      setAutomationState('completed');
+
+      // Start countdown
+      setSecondsUntilNext(5);
+      const countdownInterval = setInterval(() => {
+        setSecondsUntilNext(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Wait 5 seconds to show success message, then advance to next job
+      setTimeout(() => {
+        clearInterval(countdownInterval);
+        onApplicationComplete();
+        // Don't close the modal - let the parent component handle advancing to next job
+      }, 5000);
     } else if (result.status === 'error' || result.status === 'failed') {
       setAutomationState('error');
     } else {
@@ -190,15 +224,15 @@ export function JobApplicationModal({
   const startAutomation = async () => {
     try {
       setAutomationState('analyzing');
-      
+
       // Get CSRF token
       const tokenResponse = await fetch('/api/csrf-token', {
         credentials: 'include',
       });
       const { token } = await tokenResponse.json();
-      
-      // Call async automation endpoint
-      const response = await fetch('/api/automation/process-application-async', {
+
+      // Call email-based automation endpoint
+      const response = await fetch('/api/automation/process-email-application', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,32 +241,26 @@ export function JobApplicationModal({
         },
         credentials: 'include',
         body: JSON.stringify({
-          job_url: applicationUrl,
-          user_form_data: userFormData || {}
+          job_url: applicationUrl
         })
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      const asyncResult = await response.json();
-      
-      if (asyncResult.status === 'queued') {
-        // Start polling for status
-        pollAutomationStatus(asyncResult.session_key);
-      } else {
-        // Handle immediate error
-        setAutomationResult(asyncResult);
-        handleAutomationResult(asyncResult);
-      }
-      
+
+      const result = await response.json();
+
+      // Handle immediate result (no polling needed for email-based)
+      setAutomationResult(result);
+      handleAutomationResult(result);
+
     } catch (error) {
       console.error('Automation failed:', error);
       setAutomationState('error');
-      setAutomationResult({ 
+      setAutomationResult({
         status: 'error',
-        error: (error as Error).message 
+        error: (error as Error).message
       });
     }
   };
@@ -247,13 +275,16 @@ export function JobApplicationModal({
   const submitMissingFields = async () => {
     try {
       setIsSubmittingMissingFields(true);
-      
+
       const tokenResponse = await fetch('/api/csrf-token', {
         credentials: 'include',
       });
       const { token } = await tokenResponse.json();
-      
-      const response = await fetch('/api/automation/submit-missing-fields', {
+
+      // Extract lead_id from the automationResult (added by our new endpoint)
+      const leadId = automationResult?.lead_id;
+
+      const response = await fetch('/api/automation/submit-preferences-and-apply', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -262,35 +293,53 @@ export function JobApplicationModal({
         },
         credentials: 'include',
         body: JSON.stringify({
-          session_id: sessionId,
+          lead_id: leadId,
           missing_field_values: missingFieldValues
         })
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const result = await response.json();
-      
-      if (result.status === 'processing') {
-        // Start polling for the async result
-        pollAutomationStatus(result.session_key);
-      } else if (result.status === 'ready_to_submit') {
+
+      if (result.status === 'submitted') {
         setAutomationResult(result);
-        setAutomationState('ready_to_submit');
+        setAutomationState('completed');
+
+        // Start countdown
+        setSecondsUntilNext(5);
+        const countdownInterval = setInterval(() => {
+          setSecondsUntilNext(prev => {
+            if (prev <= 1) {
+              clearInterval(countdownInterval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        // Wait 5 seconds to show success message, then advance to next job
+        setTimeout(() => {
+          clearInterval(countdownInterval);
+          onApplicationComplete();
+          // Don't close the modal - let the parent component handle advancing to next job
+        }, 5000);
       } else {
         setAutomationResult(result);
         setAutomationState('error');
       }
-      
+
+      setIsSubmittingMissingFields(false);
+
     } catch (error) {
       console.error('Failed to submit missing fields:', error);
       setIsSubmittingMissingFields(false);
       setAutomationState('error');
-      setAutomationResult({ 
+      setAutomationResult({
         status: 'error',
-        error: (error as Error).message 
+        error: (error as Error).message
       });
     }
   };
@@ -326,16 +375,31 @@ export function JobApplicationModal({
       
       if (result.status === 'completed') {
         setAutomationState('completed');
+
+        // Start countdown
+        setSecondsUntilNext(5);
+        const countdownInterval = setInterval(() => {
+          setSecondsUntilNext(prev => {
+            if (prev <= 1) {
+              clearInterval(countdownInterval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        // Wait 5 seconds to show success message, then advance to next job
         setTimeout(() => {
+          clearInterval(countdownInterval);
           onApplicationComplete();
-          onClose();
-        }, 2000);
+          // Don't close the modal - let the parent component handle advancing to next job
+        }, 5000);
       } else if (result.status === 'requires_captcha') {
         setAutomationState('error');
-        setAutomationResult({ 
+        setAutomationResult({
           status: 'error',
           error: 'Captcha detected. Please complete the application manually.',
-          requires_captcha: true 
+          requires_captcha: true
         });
       } else {
         setAutomationState('error');
@@ -469,7 +533,7 @@ export function JobApplicationModal({
             {automationState === 'error' && (
               <>
                 <AlertTriangle className="h-4 w-4 text-red-600" />
-                <span className="text-sm font-medium text-red-600">Automation failed - manual application required</span>
+                <span className="text-sm font-medium text-red-600">Technical issue - Let's come back to this one later</span>
               </>
             )}
           </div>
@@ -488,12 +552,12 @@ export function JobApplicationModal({
                     <div className="absolute inset-4 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce"></div>
                   </div>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Analyzing Application Form</h3>
-                <p className="text-gray-600 mb-2">Our AI is studying the job application requirements...</p>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">Analyzing Job Requirements</h3>
+                <p className="text-gray-600 mb-2">Our AI is discovering what information this employer needs...</p>
                 <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-                  <span>🦊 Firefox + AI</span>
+                  <span>AI Analysis</span>
                   <span>•</span>
-                  <span>✨ Smart field mapping</span>
+                  <span>Smart Detect Defaults</span>
                 </div>
               </div>
             </div>
@@ -547,13 +611,27 @@ export function JobApplicationModal({
                         )}
                       </select>
                     ) : (
-                      <input
-                        type={field.type}
-                        value={missingFieldValues[field.semantic_field] || ''}
-                        onChange={(e) => handleMissingFieldChange(field.semantic_field, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        placeholder={`Enter your ${field.label.toLowerCase()}`}
-                      />
+                      <div className="space-y-2">
+                        <input
+                          type={field.type}
+                          value={missingFieldValues[field.semantic_field] || ''}
+                          onChange={(e) => handleMissingFieldChange(field.semantic_field, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder={`Enter your ${field.label.toLowerCase()}`}
+                        />
+                        {field.suggested_answer && (
+                          <div className="text-xs text-gray-500">
+                            <span className="font-medium">Suggested:</span> {field.suggested_answer}
+                            <button
+                              type="button"
+                              onClick={() => handleMissingFieldChange(field.semantic_field, field.suggested_answer || '')}
+                              className="ml-2 text-purple-600 hover:text-purple-800 underline"
+                            >
+                              Use this
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -646,9 +724,15 @@ export function JobApplicationModal({
                 <p className="text-green-700 mb-4">
                   Your application has been successfully submitted to {company}.
                 </p>
-                <p className="text-sm text-gray-600">
-                  This modal will close automatically...
-                </p>
+                {currentJobIndex !== undefined && totalJobs !== undefined && currentJobIndex < totalJobs - 1 ? (
+                  <p className="text-sm text-gray-600">
+                    Moving to next job in {secondsUntilNext} second{secondsUntilNext !== 1 ? 's' : ''}...
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    All applications complete!
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -656,18 +740,18 @@ export function JobApplicationModal({
           {/* Error State */}
           {automationState === 'error' && (
             <div className="text-center max-w-md mx-auto">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="h-8 w-8 text-red-600" />
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="h-8 w-8 text-orange-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Automation Failed</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Minor Technical Issue</h3>
               <p className="text-gray-600 mb-4">
-                {automationResult?.error || 'An unexpected error occurred during automation.'}
+                We encountered a small hiccup with this application. Don't worry - we'll come back to it later!
               </p>
-              
+
               {automationResult?.requires_captcha && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800">
-                    This site requires captcha verification. Please apply manually.
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    This employer uses additional verification. We'll handle this one separately.
                   </p>
                 </div>
               )}
@@ -697,14 +781,13 @@ export function JobApplicationModal({
             <div className="flex items-center gap-4">
               {automationState === 'error' ? (
                 <>
-                  <span>⚠️ Manual application required</span>
-                  <span>🔒 Secure application process</span>
+                  <span>We'll revisit this one later</span>
                 </>
               ) : (
                 <>
-                  <span>🤖 AI-powered automation</span>
-                  <span>🦊 Firefox + Playwright</span>
-                  <span>🔒 Secure environment</span>
+                  <span>AI-powered application</span>
+                  <span>Gmail API integration</span>
+                  <span>🔒 Secure & personal</span>
                 </>
               )}
             </div>

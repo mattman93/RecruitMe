@@ -23,7 +23,13 @@ class User extends Authenticatable
         'password',
         'google_id',
         'avatar',
+        'user_role',
     ];
+
+    // User role constants
+    const ROLE_USER = 0;
+    const ROLE_STAFF = 1;
+    const ROLE_SUPER_ADMIN = 2;
 
     /**
      * The attributes that should be hidden for serialization.
@@ -69,5 +75,29 @@ class User extends Authenticatable
     public function hasResume(): bool
     {
         return $this->uploadedFiles()->where('file_type', 'resume')->exists();
+    }
+
+    /**
+     * Check if user is a staff admin
+     */
+    public function isStaff(): bool
+    {
+        return $this->user_role >= self::ROLE_STAFF;
+    }
+
+    /**
+     * Check if user is a super admin
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->user_role === self::ROLE_SUPER_ADMIN;
+    }
+
+    /**
+     * Check if user can access admin features
+     */
+    public function canAccessAdmin(): bool
+    {
+        return $this->user_role >= self::ROLE_STAFF;
     }
 }

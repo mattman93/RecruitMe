@@ -116,6 +116,11 @@ Route::get('/enterprise', function () {
     return Inertia::render('Welcome'); // Load the React SPA which will handle the enterprise state
 })->name('enterprise');
 
+// Admin routes - Super Admin only
+Route::get('/admin/data-ingestion', function () {
+    return Inertia::render('Welcome'); // Load the React SPA which will handle the admin state
+})->middleware(['auth'])->name('admin.data-ingestion');
+
 // Job site proxy routes
 Route::get('/proxy/job-site', [JobProxyController::class, 'proxyJobSite'])->name('proxy.job-site');
 Route::get('/job-proxy', [JobProxyController::class, 'proxyJobSite'])->name('job.proxy');

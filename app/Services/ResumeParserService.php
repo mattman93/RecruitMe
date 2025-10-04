@@ -27,13 +27,13 @@ class ResumeParserService
     {
         // Store the original file
         $filePath = $this->storeFile($file, $userId);
-        
+
         // Extract text from the file
         $rawText = $this->extractText($file);
-        
+
         // Parse with OpenAI
         $parsedData = $this->parseWithOpenAI($rawText);
-        
+
         // Create and save the parsed resume
         $parsedResume = $this->saveParsedResume([
             'user_id' => $userId,
@@ -51,6 +51,84 @@ class ResumeParserService
         $this->saveWorkExperience($userId, $parsedData['work_experience'] ?? [], $parsedResume);
 
         return $parsedResume;
+    }
+
+    /**
+     * Parse a resume from an already stored file path.
+     */
+    public function parseResumeFromStorage(string $storagePath, int $userId): ParsedResume
+    {
+        if (!Storage::exists($storagePath)) {
+            throw new \Exception("File not found: {$storagePath}");
+        }
+
+        $fullPath = Storage::path($storagePath);
+        $extension = pathinfo($storagePath, PATHINFO_EXTENSION);
+        $fileName = basename($storagePath);
+
+        // Extract text from the stored file
+        $rawText = $this->extractTextFromStoredFile($fullPath, $extension);
+
+        // Parse with OpenAI
+        $parsedData = $this->parseWithOpenAI($rawText);
+
+        // Create and save the parsed resume
+        $parsedResume = $this->saveParsedResume([
+            'user_id' => $userId,
+            'original_filename' => $fileName,
+            'file_path' => $storagePath,
+            'file_type' => $extension,
+            'file_size' => Storage::size($storagePath),
+            'raw_text' => $rawText,
+            'parsed_data' => $parsedData,
+            'parsing_method' => 'openai',
+            'parsed_at' => now(),
+        ], $parsedData);
+
+        // Save work experience to separate table
+        $this->saveWorkExperience($userId, $parsedData['work_experience'] ?? [], $parsedResume);
+
+        return $parsedResume;
+    }
+
+    /**
+     * Extract text from a stored file.
+     */
+    protected function extractTextFromStoredFile(string $fullPath, string $extension): string
+    {
+        $extension = strtolower($extension);
+
+        switch ($extension) {
+            case 'pdf':
+                return $this->extractTextFromStoredPdf($fullPath);
+            case 'txt':
+                return file_get_contents($fullPath);
+            case 'doc':
+            case 'docx':
+                throw new \Exception('Word document parsing not yet implemented. Please upload PDF or TXT files.');
+            default:
+                throw new \Exception("Unsupported file type: {$extension}");
+        }
+    }
+
+    /**
+     * Extract text from a stored PDF file.
+     */
+    protected function extractTextFromStoredPdf(string $fullPath): string
+    {
+        try {
+            $pdf = $this->pdfParser->parseFile($fullPath);
+            $text = $pdf->getText();
+
+            // Clean up the text
+            $text = preg_replace('/\s+/', ' ', $text);
+            $text = trim($text);
+
+            return $text;
+        } catch (\Exception $e) {
+            Log::error('PDF parsing failed: ' . $e->getMessage());
+            throw new \Exception('Failed to parse PDF file');
+        }
     }
 
     /**

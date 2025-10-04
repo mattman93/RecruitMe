@@ -15,8 +15,9 @@ import { HowItWorks } from "./components/HowItWorks";
 import { SocialProof } from "./components/SocialProof";
 import { Enterprise } from "./components/Enterprise";
 import { ContactUs } from "./components/ContactUs";
+import { DataIngestionStats } from "./components/DataIngestionStats";
 
-type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated' | 'upload' | 'home' | 'enterprise' | 'contact-us';
+type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated' | 'upload' | 'home' | 'enterprise' | 'contact-us' | 'admin-data-ingestion';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
@@ -51,6 +52,8 @@ export default function App() {
           setAppState('authenticated');
         } else if (window.location.pathname === '/enterprise') {
           setAppState('enterprise');
+        } else if (window.location.pathname === '/admin/data-ingestion') {
+          setAppState('admin-data-ingestion');
         } else {
           setAppState('home');
         }
@@ -383,6 +386,16 @@ export default function App() {
   if (appState === 'contact-us') {
     return (
       <ContactUs onClose={() => setAppState('guest')} />
+    );
+  }
+
+  // Admin Data Ingestion state
+  if (appState === 'admin-data-ingestion') {
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <DataIngestionStats />
+      </div>
     );
   }
 

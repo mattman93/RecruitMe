@@ -6,6 +6,7 @@ use App\Models\Lead;
 use App\Models\User;
 use App\Models\UserWork;
 use App\Models\ParsedResume;
+use App\Models\JobApplication;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -43,6 +44,11 @@ class JobMatchingService
         $jobTitles = $workExperience->pluck('job_title')->map('strtolower')->toArray();
         $experienceLevel = $this->determineExperienceLevel($parsedResume->years_of_experience ?? 0);
 
+        // Get user's applied lead IDs to exclude them
+        $appliedLeadIds = JobApplication::where('user_id', $parsedResume->user_id)
+            ->pluck('lead_id')
+            ->toArray();
+
         // Build query for skills-based matching with chunked processing
         $relevantJobs = collect();
         $chunkSize = 500; // Process 500 jobs at a time
@@ -51,13 +57,14 @@ class JobMatchingService
 
         Lead::select('*')
             ->selectRaw('
-                (CASE 
-                    WHEN experience_level = ? THEN 20 
+                (CASE
+                    WHEN experience_level = ? THEN 20
                     WHEN experience_level IN (?, ?) THEN 15
-                    ELSE 5 
+                    ELSE 5
                 END) as experience_score
             ', [$experienceLevel, $this->getAdjacentLevels($experienceLevel)[0], $this->getAdjacentLevels($experienceLevel)[1]])
             ->where('is_active', true)
+            ->whereNotIn('id', $appliedLeadIds) // Exclude jobs user has already applied to
             ->orderBy('created_at', 'desc') // Process newest jobs first
             ->chunk($chunkSize, function ($jobs) use ($userSkills, $jobTitles, $parsedResume, &$relevantJobs, $limit, &$processedCount, $maxJobs) {
                 foreach ($jobs as $job) {
@@ -109,6 +116,15 @@ class JobMatchingService
         $estimatedExperience = $this->estimateYearsOfExperience($workExperience);
         $experienceLevel = $this->determineExperienceLevel($estimatedExperience);
 
+        // Get user's applied lead IDs to exclude them
+        $userId = $workExperience->first()->user_id ?? null;
+        $appliedLeadIds = [];
+        if ($userId) {
+            $appliedLeadIds = JobApplication::where('user_id', $userId)
+                ->pluck('lead_id')
+                ->toArray();
+        }
+
         // Experience-based matching with chunked processing
         $relevantJobs = collect();
         $chunkSize = 500; // Process 500 jobs at a time
@@ -117,13 +133,14 @@ class JobMatchingService
 
         Lead::select('*')
             ->selectRaw('
-                (CASE 
-                    WHEN experience_level = ? THEN 20 
+                (CASE
+                    WHEN experience_level = ? THEN 20
                     WHEN experience_level IN (?, ?) THEN 15
-                    ELSE 5 
+                    ELSE 5
                 END) as experience_score
             ', [$experienceLevel, $this->getAdjacentLevels($experienceLevel)[0], $this->getAdjacentLevels($experienceLevel)[1]])
             ->where('is_active', true)
+            ->whereNotIn('id', $appliedLeadIds) // Exclude jobs user has already applied to
             ->orderBy('created_at', 'desc') // Process newest jobs first
             ->chunk($chunkSize, function ($jobs) use ($keywords, $jobTitles, &$relevantJobs, $limit, &$processedCount, $maxJobs) {
                 foreach ($jobs as $job) {

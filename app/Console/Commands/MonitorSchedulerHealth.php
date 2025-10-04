@@ -133,34 +133,54 @@ class MonitorSchedulerHealth extends Command
     
     private function sendHealthAlert(array $issues): void
     {
-        $subject = '🚨 AppliFlow Scheduler Health Alert';
-        $message = "
-            <h2>🚨 Scheduler Health Issues Detected</h2>
-            <p><strong>Issues found:</strong></p>
-            <ul>
-                " . implode('', array_map(fn($issue) => "<li>{$issue}</li>", $issues)) . "
-            </ul>
-            <p><strong>Timestamp:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>
-            <p><strong>Automatic Actions Taken:</strong></p>
-            <ul>
-                <li>Attempted to dispatch missed jobs</li>
-                <li>Health monitoring will continue</li>
-            </ul>
-            
-            <hr>
-            <p><em>This is an automated health alert from AppliFlow monitoring system.</em></p>
-        ";
-        
-        try {
-            Mail::raw(strip_tags($message), function ($mail) use ($subject, $message) {
-                $mail->to('mattcieslak93@gmail.com')
-                     ->subject($subject)
-                     ->html($message);
-            });
-            
-            Log::info('Scheduler health alert email sent');
-        } catch (\Exception $e) {
-            Log::error('Failed to send health alert email: ' . $e->getMessage());
+        // Log health issues instead of sending email
+        Log::warning('🚨 AppliFlow Scheduler Health Alert', [
+            'issues' => $issues,
+            'actions_taken' => [
+                'Attempted to dispatch missed jobs',
+                'Health monitoring will continue'
+            ]
+        ]);
+
+        // Only send email for critical scheduler failures (multiple missed jobs)
+        $missedJobsCount = 0;
+        foreach ($issues as $issue) {
+            if (preg_match('/Found (\d+) missed job/', $issue, $matches)) {
+                $missedJobsCount = (int)$matches[1];
+            }
+        }
+
+        // Send email only if more than 3 jobs were missed (indicates serious problem)
+        if ($missedJobsCount > 3) {
+            $subject = '🚨 AppliFlow Scheduler Health Alert - CRITICAL';
+            $message = "
+                <h2>🚨 Scheduler Health Issues Detected</h2>
+                <p><strong>Issues found:</strong></p>
+                <ul>
+                    " . implode('', array_map(fn($issue) => "<li>{$issue}</li>", $issues)) . "
+                </ul>
+                <p><strong>Timestamp:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>
+                <p><strong>Automatic Actions Taken:</strong></p>
+                <ul>
+                    <li>Attempted to dispatch missed jobs</li>
+                    <li>Health monitoring will continue</li>
+                </ul>
+
+                <hr>
+                <p><em>This is an automated health alert from AppliFlow monitoring system.</em></p>
+            ";
+
+            try {
+                Mail::raw(strip_tags($message), function ($mail) use ($subject, $message) {
+                    $mail->to('mattcieslak93@gmail.com')
+                         ->subject($subject)
+                         ->html($message);
+                });
+
+                Log::info('Critical scheduler health alert email sent');
+            } catch (\Exception $e) {
+                Log::error('Failed to send health alert email: ' . $e->getMessage());
+            }
         }
     }
 }

@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\PlaywrightAutomationService;
+use App\Services\JobApplicationService;
+use App\Models\User;
+use App\Models\Lead;
 
 class ProcessJobApplication extends Command
 {
@@ -12,7 +14,7 @@ class ProcessJobApplication extends Command
                            {user_id : The user ID}
                            {--form-data= : JSON encoded form data}';
 
-    protected $description = 'Process job application using Playwright automation via CLI';
+    protected $description = 'Process job application using email-based strategy via CLI';
 
     public function handle()
     {
@@ -31,20 +33,46 @@ class ProcessJobApplication extends Command
             $this->info("URL: {$jobUrl}");
             $this->info("User ID: {$userId}");
 
-            $service = app(PlaywrightAutomationService::class);
-            
+            // Find the user
+            $user = User::find($userId);
+            if (!$user) {
+                $this->error("User not found with ID: {$userId}");
+                return 1;
+            }
+
+            // Find the lead by source URL
+            $lead = Lead::where('source_url', $jobUrl)->first();
+            if (!$lead) {
+                $this->error("Lead not found with URL: {$jobUrl}");
+                return 1;
+            }
+
+            $service = app(JobApplicationService::class);
+
             $startTime = microtime(true);
-            $result = $service->processJobApplicationWithLLM($jobUrl, $userId, $formData);
+
+            // Parse custom responses from form data
+            $customResponses = $formData['custom_responses'] ?? [];
+
+            // Queue and process the application using email-based strategy
+            $application = $service->queueApplication($user, $lead, $customResponses);
+            $result = $service->processApplication($application);
+
             $duration = round(microtime(true) - $startTime, 2);
-            
-            $this->info("Automation completed in {$duration} seconds");
-            
+
+            $this->info("Email-based application completed in {$duration} seconds");
+
             // Output result as JSON so the API can parse it
             $this->line('RESULT_START');
-            $this->line(json_encode($result));
+            $this->line(json_encode([
+                'status' => $result ? 'submitted' : 'failed',
+                'application_id' => $application->id,
+                'method' => 'email_based',
+                'message' => $result ? 'Application email sent successfully' : 'Application failed'
+            ]));
             $this->line('RESULT_END');
-            
-            return $result['status'] === 'ready_to_submit' ? 0 : 1;
+
+            return $result ? 0 : 1;
             
         } catch (\Exception $e) {
             $this->error("Error: " . $e->getMessage());

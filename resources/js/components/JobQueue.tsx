@@ -40,17 +40,25 @@ export function JobQueue() {
   
   // Application processing state
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
-  const [currentJobIndex, setCurrentJobIndex] = useState(0);
   const [completedApplications, setCompletedApplications] = useState<number[]>([]);
   const [userFormData, setUserFormData] = useState<any>(null);
+
+  // Animation state
+  const [removingJobId, setRemovingJobId] = useState<number | null>(null);
+  const [activeLeads, setActiveLeads] = useState<Lead[]>([]);
 
   useEffect(() => {
     fetchLeads();
     fetchUserFormData();
   }, []);
+
+  // Update activeLeads when leads change
+  useEffect(() => {
+    setActiveLeads(leads.slice(0, 10));
+  }, [leads]);
 
   const fetchLeads = async () => {
     try {
@@ -171,19 +179,24 @@ export function JobQueue() {
 
   const handleApplicationMethod = async () => {
     try {
+      // If queue is empty, load more jobs
+      if (activeLeads.length === 0) {
+        await fetchLeads();
+        return;
+      }
+
       // Check if there are jobs to apply to
-      if (displayLeads.length === 0) {
+      if (activeLeads.length === 0) {
         alert('No jobs available to apply to. Please wait for new jobs to load.');
         return;
       }
-      
+
       setIsProcessing(true);
-      setCurrentJobIndex(0);
       setCompletedApplications([]);
-      
+
       // Start with the first job
       setModalOpen(true);
-      
+
     } catch (error) {
       console.error('Error starting applications:', error);
       setIsProcessing(false);
@@ -192,24 +205,30 @@ export function JobQueue() {
   };
 
   const handleApplicationComplete = () => {
-    const currentLead = displayLeads[currentJobIndex];
+    const currentLead = activeLeads[0]; // Always working with the first card now
     setCompletedApplications(prev => [...prev, currentLead.id]);
-    
-    // Move to next job or finish
-    if (currentJobIndex < displayLeads.length - 1) {
-      setCurrentJobIndex(prev => prev + 1);
-      // Modal stays open for the next job
-    } else {
-      // All jobs completed
-      setModalOpen(false);
-      setIsProcessing(false);
-      console.log(`Completed applications for ${completedApplications.length + 1} jobs`);
-      
-      // Refresh job queue after completion
+
+    // Close modal and stop processing state immediately
+    setModalOpen(false);
+    setIsProcessing(false);
+
+    // After 5 second delay (already shown in modal), trigger animation
+    setTimeout(() => {
+      // Start exit animation
+      setRemovingJobId(currentLead.id);
+
+      // After animation completes, remove from activeLeads
       setTimeout(() => {
-        refreshJobQueue();
-      }, 1000);
-    }
+        setActiveLeads(prev => prev.slice(1)); // Remove first job
+        setRemovingJobId(null);
+
+        // Check if all jobs are done
+        if (activeLeads.length <= 1) {
+          console.log(`Completed applications for ${completedApplications.length + 1} jobs`);
+        }
+        // If there are more jobs, the button will be enabled and user can click it
+      }, 500); // Match CSS animation duration
+    }, 100); // Small delay after modal closes
   };
 
   const handleModalClose = () => {
@@ -218,23 +237,28 @@ export function JobQueue() {
   };
 
   const handleSkipJob = () => {
-    console.log(`Skipping job: ${displayLeads[currentJobIndex].job_title} at ${displayLeads[currentJobIndex].company}`);
-    
-    // Move to next job without marking current as completed
-    if (currentJobIndex < displayLeads.length - 1) {
-      setCurrentJobIndex(prev => prev + 1);
-      // Modal stays open for the next job
-    } else {
-      // No more jobs to skip to
-      setModalOpen(false);
-      setIsProcessing(false);
-      console.log(`Skipped final job. Completed applications for ${completedApplications.length} jobs`);
-      
-      // Refresh job queue after completion
+    const currentLead = activeLeads[0];
+    console.log(`Skipping job: ${currentLead.job_title} at ${currentLead.company}`);
+
+    // Close modal and stop processing state immediately
+    setModalOpen(false);
+    setIsProcessing(false);
+
+    // Trigger exit animation for skipped job
+    setTimeout(() => {
+      setRemovingJobId(currentLead.id);
+
       setTimeout(() => {
-        refreshJobQueue();
-      }, 1000);
-    }
+        setActiveLeads(prev => prev.slice(1));
+        setRemovingJobId(null);
+
+        // Check if all jobs are done
+        if (activeLeads.length <= 1) {
+          console.log(`Skipped final job. Completed applications for ${completedApplications.length} jobs`);
+        }
+        // If there are more jobs, the button will be enabled and user can click it
+      }, 500);
+    }, 100);
   };
 
 
@@ -282,9 +306,44 @@ export function JobQueue() {
     );
   }
 
-  // Limit to first 10 jobs for display
-  const displayLeads = leads.slice(0, 10);
+  // Calculate button text and state
+  const getButtonContent = () => {
+    if (activeLeads.length === 0) {
+      return {
+        text: "Load More Matches",
+        icon: <Zap className="mr-3 h-6 w-6" />,
+        className: "w-full h-14 bg-purple-600 hover:bg-purple-700 text-white text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+      };
+    }
 
+    const totalOriginal = 10;
+    const remaining = activeLeads.length;
+    const applied = totalOriginal - remaining;
+
+    if (!isProcessing && applied === 0) {
+      return {
+        text: `Start Applying to ${activeLeads.length} Jobs`,
+        icon: <Zap className="mr-3 h-6 w-6" />,
+        className: "w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+      };
+    }
+
+    if (isProcessing) {
+      return {
+        text: `Apply to Next Opportunity [${applied + 1}/${totalOriginal}]`,
+        icon: <Loader2 className="mr-3 h-6 w-6 animate-spin" />,
+        className: "w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+      };
+    }
+
+    return {
+      text: `Apply to Next Opportunity [${applied}/${totalOriginal}]`,
+      icon: <Zap className="mr-3 h-6 w-6" />,
+      className: "w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+    };
+  };
+
+  const buttonContent = getButtonContent();
 
   return (
     <div className="space-y-6">
@@ -299,30 +358,34 @@ export function JobQueue() {
           )}
         </div>
         <Badge variant="secondary" className="px-3 py-1">
-          {displayLeads.length} of {leads.length} jobs
+          {activeLeads.length} of {leads.length} jobs
         </Badge>
       </div>
 
-      {/* Application Status */}
-      {isProcessing && (
-        <div className="space-y-2">
-          <div className="flex justify-between items-center text-sm">
-            <span>Applications in Progress ({completedApplications.length + 1}/{displayLeads.length})</span>
-            <span>{Math.round(((completedApplications.length + 1) / displayLeads.length) * 100)}%</span>
-          </div>
-          {displayLeads[currentJobIndex] && (
-            <div className="text-xs text-gray-400 flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Currently applying to: {displayLeads[currentJobIndex].job_title} at {displayLeads[currentJobIndex].company}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Start Applying Button - Moved to Top */}
+      <div className="space-y-3">
+        <Button
+          onClick={handleApplicationMethod}
+          disabled={isProcessing}
+          className={buttonContent.className}
+          size="lg"
+        >
+          {buttonContent.icon}
+          {buttonContent.text}
+        </Button>
+      </div>
 
       {/* Job Cards */}
       <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-        {displayLeads.map((lead) => (
-          <Card key={lead.id} className="p-6 hover:shadow-md transition-all duration-300 cursor-pointer relative">
+        {activeLeads.map((lead) => (
+          <Card
+            key={lead.id}
+            className={`p-6 hover:shadow-md transition-all duration-500 cursor-pointer relative ${
+              removingJobId === lead.id
+                ? 'animate-slide-out-up opacity-0 -translate-y-4'
+                : 'animate-slide-in-down'
+            }`}
+          >
             <div className="space-y-4">
               {/* Header */}
               <div className="space-y-2">
@@ -367,47 +430,19 @@ export function JobQueue() {
         ))}
       </div>
 
-      {/* Start Applying Button */}
-      <div className="pt-4 border-t border-border space-y-3">
-        <Button 
-          onClick={handleApplicationMethod}
-          disabled={isProcessing || displayLeads.length === 0}
-          className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50"
-          size="lg"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="mr-3 h-6 w-6 animate-spin" />
-              Processing Applications...
-            </>
-          ) : displayLeads.length === 0 ? (
-            <>
-              <Loader2 className="mr-3 h-6 w-6 animate-spin" />
-              Loading New Jobs...
-            </>
-          ) : (
-            <>
-              <Zap className="mr-3 h-6 w-6" />
-              Start Applying to {displayLeads.length} Jobs
-            </>
-          )}
-        </Button>
-      </div>
-
       {/* Application Modal */}
-      {modalOpen && displayLeads[currentJobIndex] && (
+      {modalOpen && activeLeads[0] && (
         <JobApplicationModal
           isOpen={modalOpen}
           onClose={handleModalClose}
-          jobTitle={displayLeads[currentJobIndex].job_title}
-          company={displayLeads[currentJobIndex].company}
-          applicationUrl={displayLeads[currentJobIndex].source_url}
+          jobTitle={activeLeads[0].job_title}
+          company={activeLeads[0].company}
+          applicationUrl={activeLeads[0].source_url}
           onApplicationComplete={handleApplicationComplete}
           onSkipJob={handleSkipJob}
           userFormData={userFormData}
-          autoFillData={displayLeads[currentJobIndex].auto_fill_data}
-          currentJobIndex={currentJobIndex}
-          totalJobs={displayLeads.length}
+          currentJobIndex={10 - activeLeads.length}
+          totalJobs={10}
         />
       )}
     </div>

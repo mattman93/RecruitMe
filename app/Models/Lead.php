@@ -94,6 +94,14 @@ class Lead extends Model
         'last_scraped_at',
         'requisition_id',
         'collapse_key',
+
+        // Form field discovery
+        'discovered_fields',
+        'fields_discovered_at',
+
+        // Contact discovery
+        'discovered_contacts',
+        'discovered_contacts_at',
     ];
 
     protected $casts = [
@@ -116,6 +124,10 @@ class Lead extends Model
         'company_investors' => 'array',
         'estimated_publish_date' => 'datetime',
         'last_scraped_at' => 'datetime',
+        'discovered_fields' => 'array',
+        'fields_discovered_at' => 'datetime',
+        'discovered_contacts' => 'array',
+        'discovered_contacts_at' => 'datetime',
     ];
 
     /**

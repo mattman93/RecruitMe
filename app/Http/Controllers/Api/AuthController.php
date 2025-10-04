@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UploadedFile;
+use App\Services\ResumeParserService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -122,7 +123,8 @@ class AuthController extends Controller
         $user = Auth::user();
         $userPath = "user-uploads/{$user->id}";
         $movedFiles = [];
-        
+        $resumeParserService = app(ResumeParserService::class);
+
         // Get guest uploads from current session first
         $guestUploads = session('guest_uploads', []);
         $sessionId = session()->getId();
@@ -154,6 +156,20 @@ class AuthController extends Controller
                         'type' => $uploadedFile->mime_type,
                         'created_at' => $uploadedFile->created_at->toISOString()
                     ];
+
+                    // Parse resume if it's a PDF (resume file)
+                    if ($uploadedFile->file_type === 'resume' && in_array($uploadedFile->mime_type, ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain'])) {
+                        try {
+                            Log::info("Parsing claimed resume for user {$user->id}", ['file_id' => $uploadedFile->id]);
+                            $resumeParserService->parseResumeFromStorage($newPath, $user->id);
+                        } catch (\Exception $e) {
+                            Log::error("Failed to parse claimed resume: " . $e->getMessage(), [
+                                'user_id' => $user->id,
+                                'file_id' => $uploadedFile->id,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    }
                 }
             }
             
@@ -219,8 +235,22 @@ class AuthController extends Controller
                             'type' => $uploadedFile->mime_type,
                             'created_at' => $uploadedFile->created_at->toISOString()
                         ];
+
+                        // Parse resume if it's a PDF (resume file)
+                        if ($uploadedFile->file_type === 'resume' && in_array($uploadedFile->mime_type, ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain'])) {
+                            try {
+                                Log::info("Parsing claimed resume for user {$user->id}", ['file_id' => $uploadedFile->id]);
+                                $resumeParserService->parseResumeFromStorage($newPath, $user->id);
+                            } catch (\Exception $e) {
+                                Log::error("Failed to parse claimed resume: " . $e->getMessage(), [
+                                    'user_id' => $user->id,
+                                    'file_id' => $uploadedFile->id,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
                     }
-                    
+
                     // Clean up the guest directory
                     Storage::deleteDirectory($guestDir);
                     break; // Only process one directory

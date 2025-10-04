@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\JobApplication;
 use App\Models\Lead;
+use App\Models\UserFormPreference;
 use App\Services\JobApplicationService;
 use App\Services\PlaywrightAutomationService;
 use Illuminate\Http\Request;
@@ -690,6 +691,168 @@ class JobApplicationController extends Controller
             return response()->json([
                 'status' => 'error',
                 'error' => 'Application submission failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * NEW: Process email-based application with discovered fields (ASYNC)
+     */
+    public function processEmailApplication(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'job_url' => 'required|url',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = Auth::user();
+        $jobUrl = $request->get('job_url');
+
+        try {
+            // Find the lead by source URL
+            $lead = Lead::where('source_url', $jobUrl)->first();
+            if (!$lead) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => 'Job not found in our database'
+                ], 404);
+            }
+
+            // Get fields that need user input (quick check, no OpenAI calls)
+            $fieldsNeedingInput = $this->applicationService->getFieldsNeedingUserInput($lead, $user->id);
+
+            if (empty($fieldsNeedingInput)) {
+                // No missing fields, dispatch async job to process application
+                $sessionKey = 'email_app_' . $user->id . '_' . $lead->id . '_' . time() . '_' . rand(1000, 9999);
+
+                \Log::info('Starting async email application processing', [
+                    'session_key' => $sessionKey,
+                    'job_url' => $jobUrl,
+                    'lead_id' => $lead->id,
+                    'user_id' => $user->id
+                ]);
+
+                // Store initial status
+                \Illuminate\Support\Facades\Cache::put($sessionKey, [
+                    'status' => 'processing',
+                    'message' => 'Processing your application...',
+                    'queued_at' => now()->toISOString()
+                ], 600); // 10 minutes
+
+                // Dispatch the job
+                \App\Jobs\ProcessEmailApplicationJob::dispatch($lead->id, $user->id, $sessionKey);
+
+                return response()->json([
+                    'status' => 'processing',
+                    'session_key' => $sessionKey,
+                    'message' => 'Application processing started',
+                    'status_url' => "/api/automation/status/{$sessionKey}"
+                ]);
+            } else {
+                // Missing fields found, return them for user input
+                return response()->json([
+                    'status' => 'needs_user_input',
+                    'missing_fields' => array_map(function($field) {
+                        return [
+                            'semantic_field' => $field['field_name'],
+                            'label' => $field['question'],
+                            'type' => $field['field_type'] === 'boolean' ? 'select' : 'text',
+                            'required' => true,
+                            'options' => $field['field_type'] === 'boolean' ? [
+                                ['value' => 'Yes', 'label' => 'Yes'],
+                                ['value' => 'No', 'label' => 'No']
+                            ] : ($field['options'] ?? null),
+                            'suggested_answer' => $field['suggested_answer']
+                        ];
+                    }, $fieldsNeedingInput),
+                    'lead_id' => $lead->id,
+                    'session_id' => 'email_app_' . $user->id . '_' . $lead->id . '_' . time()
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Email application processing failed', [
+                'error' => $e->getMessage(),
+                'job_url' => $jobUrl,
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'error' => 'Failed to process application: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * NEW: Submit user preferences and trigger email application
+     */
+    public function submitPreferencesAndApply(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'lead_id' => 'required|integer',
+            'missing_field_values' => 'required|array'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = Auth::user();
+        $leadId = $request->get('lead_id');
+        $missingFieldValues = $request->get('missing_field_values');
+
+        try {
+            // Find the lead
+            $lead = Lead::find($leadId);
+            if (!$lead) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => 'Job not found'
+                ], 404);
+            }
+
+            // Store user preferences for future use
+            foreach ($missingFieldValues as $fieldName => $value) {
+                UserFormPreference::updateOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'field_identifier' => $fieldName
+                    ],
+                    [
+                        'field_type' => 'text',
+                        'question_text' => null, // We can enhance this later to store the actual question
+                        'response_data' => json_encode(['value' => $value, 'source' => 'user_input']),
+                        'confidence_score' => 100, // User provided = 100% confident (int, not float)
+                        'use_count' => 1
+                    ]
+                );
+            }
+
+            // Process the application with the user's custom responses
+            $application = $this->applicationService->queueApplication($user, $lead, $missingFieldValues);
+            $result = $this->applicationService->processApplication($application);
+
+            return response()->json([
+                'status' => $result ? 'submitted' : 'failed',
+                'message' => $result ? 'Application submitted successfully with your preferences' : 'Application failed',
+                'application_id' => $application->id,
+                'preferences_saved' => count($missingFieldValues)
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to submit preferences and apply', [
+                'error' => $e->getMessage(),
+                'lead_id' => $leadId,
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'error' => 'Failed to submit application: ' . $e->getMessage()
             ], 500);
         }
     }

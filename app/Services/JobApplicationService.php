@@ -7,6 +7,7 @@ use App\Models\JobSiteStructure;
 use App\Models\Lead;
 use App\Models\User;
 use App\Models\UserFormPreference;
+use App\Models\UserOAuthToken;
 use App\Models\DiscoveredContact;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -14,6 +15,9 @@ use Carbon\Carbon;
 use OpenAI\Laravel\Facades\OpenAI;
 use SendGrid\Mail\Mail;
 use SendGrid;
+use Google_Client;
+use Google_Service_Gmail;
+use Google_Service_Gmail_Message;
 
 class JobApplicationService
 {
@@ -109,10 +113,26 @@ class JobApplicationService
      */
     protected function discoverContactEmails(Lead $lead): array
     {
-        $domain = $this->extractDomainFromUrl($lead->source_url);
-        $companyName = $lead->company ?? $domain;
+        // Use smart domain extraction that filters out job boards
+        $domain = $this->extractCompanyDomain($lead);
+        $companyName = $lead->company;
 
-        Log::info("Discovering contact emails for domain: {$domain}");
+        // If we couldn't extract a valid company domain, log error and use company name as fallback
+        if (!$domain) {
+            Log::error("Could not extract company domain, cannot discover contact emails", [
+                'lead_id' => $lead->id,
+                'company' => $companyName,
+                'source_url' => $lead->source_url
+            ]);
+
+            // Return empty array or ask OpenAI to find based on company name only
+            return $this->discoverContactsByCompanyName($lead, $companyName);
+        }
+
+        Log::info("Discovering contact emails for company domain: {$domain}", [
+            'company' => $companyName,
+            'lead_id' => $lead->id
+        ]);
 
         // First, check if we have cached contacts for this lead or domain
         $cachedContacts = DiscoveredContact::getCachedContacts($lead, $domain);
@@ -143,7 +163,7 @@ class JobApplicationService
                 'messages' => [
                     [
                         'role' => 'user',
-                        'content' => "Given a company domain '{$domain}', find all possible recruiting or HR-related emails (including likely patterns). Output as JSON array with 'email' and 'type' fields. Include common patterns like hr@, careers@, recruiting@, jobs@, talent@, etc. Do not include generic emails like info@ or support@."
+                        'content' => "Given a company '{$companyName}' with domain '{$domain}', find all possible recruiting or HR-related emails (including likely patterns). Output as JSON array with 'email' and 'type' fields. Include common patterns like hr@, careers@, recruiting@, jobs@, talent@, etc. Do not include generic emails like info@ or support@. IMPORTANT: Only use the domain '{$domain}' - do NOT use job board domains like workable.com, greenhouse.io, lever.co, etc."
                     ]
                 ],
                 'max_tokens' => 500,
@@ -156,12 +176,19 @@ class JobApplicationService
             if (is_array($contacts) && !empty($contacts)) {
                 Log::info("Found contact emails via OpenAI", [
                     'domain' => $domain,
+                    'company' => $companyName,
                     'contacts' => $contacts,
                     'api_cost_estimate' => '$0.003-0.006'
                 ]);
 
                 // Cache the discovered contacts
                 DiscoveredContact::storeContacts($lead, $domain, $companyName, $contacts);
+
+                // Also save contacts to the lead record
+                $lead->update([
+                    'discovered_contacts' => $contacts,
+                    'discovered_contacts_at' => now()
+                ]);
 
                 return $contacts;
             }
@@ -180,7 +207,73 @@ class JobApplicationService
         // Cache the fallback contact as well
         DiscoveredContact::storeContacts($lead, $domain, $companyName, $fallbackContacts);
 
+        // Also save fallback contacts to the lead record
+        $lead->update([
+            'discovered_contacts' => $fallbackContacts,
+            'discovered_contacts_at' => now()
+        ]);
+
         return $fallbackContacts;
+    }
+
+    /**
+     * Discover contacts by company name only (when domain can't be extracted)
+     */
+    protected function discoverContactsByCompanyName(Lead $lead, string $companyName): array
+    {
+        Log::info("Attempting to discover domain for company: {$companyName}");
+
+        try {
+            $response = OpenAI::chat()->create([
+                'model' => 'gpt-4',
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => "Given a company name '{$companyName}', what is their likely primary domain/website? Return ONLY the domain (e.g., 'company.com') without http/https. If you're not confident, return null. Output as JSON with 'domain' field."
+                    ]
+                ],
+                'max_tokens' => 100,
+                'temperature' => 0.1
+            ]);
+
+            $content = $response->choices[0]->message->content;
+            $result = json_decode($content, true);
+
+            if (!empty($result['domain'])) {
+                $discoveredDomain = $result['domain'];
+                Log::info("OpenAI discovered domain from company name", [
+                    'company' => $companyName,
+                    'domain' => $discoveredDomain
+                ]);
+
+                // Now discover emails for this domain
+                $contacts = [
+                    ['email' => "careers@{$discoveredDomain}", 'type' => 'careers'],
+                    ['email' => "hr@{$discoveredDomain}", 'type' => 'hr'],
+                    ['email' => "recruiting@{$discoveredDomain}", 'type' => 'recruiting']
+                ];
+
+                DiscoveredContact::storeContacts($lead, $discoveredDomain, $companyName, $contacts);
+
+                // Also save to lead record
+                $lead->update([
+                    'discovered_contacts' => $contacts,
+                    'discovered_contacts_at' => now()
+                ]);
+
+                return $contacts;
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to discover domain from company name: " . $e->getMessage());
+        }
+
+        // Ultimate fallback - return empty array
+        Log::warning("Could not discover any contact emails", [
+            'lead_id' => $lead->id,
+            'company' => $companyName
+        ]);
+
+        return [];
     }
 
     /**
@@ -191,6 +284,9 @@ class JobApplicationService
         $user = $application->user;
         $lead = $application->lead;
         $formData = $application->form_data_sent;
+
+        // Discover form fields for this job (if not already discovered)
+        $discoveredFields = $this->getOrDiscoverFormFields($lead);
 
         // Get user's resume file
         $resume = $user->uploadedFiles()->where('file_type', 'resume')->latest()->first();
@@ -203,14 +299,37 @@ class JobApplicationService
 
         // Generate email body using form data and user preferences
         $contactEmails = $this->discoverContactEmails($lead);
-        $body = $this->generateEmailBody($lead, $formData, $application->custom_responses, $contactEmails, $valueProposition);
+        $body = $this->generateEmailBody($lead, $formData, $application->custom_responses, $contactEmails, $valueProposition, $discoveredFields);
 
         return [
             'subject' => $subject,
             'body' => $body,
             'resume_path' => $resume?->file_path,
-            'resume_name' => $resume?->original_name ?? 'resume.pdf'
+            'resume_name' => $resume?->original_name ?? 'resume.pdf',
+            'discovered_fields' => $discoveredFields
         ];
+    }
+
+    /**
+     * Get discovered fields for a lead (from cache or discover new)
+     */
+    protected function getOrDiscoverFormFields(Lead $lead): array
+    {
+        // Check if we already have discovered fields for this lead
+        if ($lead->discovered_fields && $lead->fields_discovered_at) {
+            // Use cached fields if discovered within last 7 days
+            if ($lead->fields_discovered_at->diffInDays(now()) <= 7) {
+                Log::info("Using cached discovered fields", [
+                    'lead_id' => $lead->id,
+                    'fields_count' => count($lead->discovered_fields),
+                    'discovered_at' => $lead->fields_discovered_at
+                ]);
+                return $lead->discovered_fields;
+            }
+        }
+
+        // Discover new fields
+        return $this->discoverFormFieldsForEmail($lead);
     }
 
     /**
@@ -281,21 +400,14 @@ class JobApplicationService
     /**
      * Generate the email body content
      */
-    protected function generateEmailBody(Lead $lead, array $formData, array $customResponses, array $discoveredContacts = [], string $valueProposition = ''): string
+    protected function generateEmailBody(Lead $lead, array $formData, array $customResponses, array $discoveredContacts = [], string $valueProposition = '', array $discoveredFields = []): string
     {
         $personal = $formData['personal'];
         $experience = $formData['experience'];
 
         $body = "";
 
-        // Add discovered contacts list at the top if provided
-        if (!empty($discoveredContacts)) {
-            $body .= "DISCOVERED CONTACTS FOR THIS APPLICATION:\n";
-            foreach ($discoveredContacts as $contact) {
-                $body .= "- {$contact['email']} ({$contact['type']})\n";
-            }
-            $body .= "\n---\n\n";
-        }
+        // Note: Discovered contacts are used for routing but not shown in email content
 
         $body .= "Dear Hiring Manager,\n\n";
         $body .= "I am writing to express my strong interest in the {$lead->title} position";
@@ -323,6 +435,16 @@ class JobApplicationService
         // Add work authorization and common preferences proactively
         $body .= $this->addCommonApplicationInfo($formData, $customResponses);
 
+        // Add discovered field responses
+        $discoveredResponses = $this->getDiscoveredFieldResponses($discoveredFields, $formData, $customResponses);
+        if (!empty($discoveredResponses)) {
+            $body .= "Application Requirements:\n\n";
+            foreach ($discoveredResponses as $question => $answer) {
+                $body .= "• {$question}: {$answer}\n";
+            }
+            $body .= "\n";
+        }
+
         // Add custom responses if any were collected
         if (!empty($customResponses)) {
             $body .= "Additional information:\n\n";
@@ -331,6 +453,8 @@ class JobApplicationService
             }
             $body .= "\n";
         }
+
+        // Note: Discovered fields are used internally but not shown in email content
 
         // Contact information
         $body .= "I am available for an interview at your convenience and can be reached at:\n";
@@ -347,7 +471,198 @@ class JobApplicationService
         $body .= "\nThank you for considering my application. I look forward to hearing from you.\n\n";
         $body .= "Best regards,\n{$personal['full_name']}";
 
+        // Add debug information if TEST_EMAIL_SHOW_DEBUG is enabled
+        if (env('TEST_EMAIL_SHOW_DEBUG', false)) {
+            $body .= "\n\n" . str_repeat("-", 80) . "\n";
+            $body .= "DEBUG INFORMATION (Only visible in TEST_EMAIL_SHOW_DEBUG mode)\n";
+            $body .= str_repeat("-", 80) . "\n\n";
+
+            // Show discovered contacts
+            if (!empty($discoveredContacts)) {
+                $body .= "DISCOVERED CONTACT EMAILS:\n";
+                foreach ($discoveredContacts as $contact) {
+                    $email = $contact['email'] ?? 'N/A';
+                    $type = $contact['type'] ?? 'unknown';
+                    $body .= "  • {$email} ({$type})\n";
+                }
+                $body .= "\n";
+            }
+
+            // Show discovered fields
+            if (!empty($discoveredFields)) {
+                $body .= "DISCOVERED FORM FIELDS:\n";
+                foreach ($discoveredFields as $field) {
+                    $fieldName = $field['field_name'] ?? 'unknown';
+                    $question = $field['question'] ?? 'N/A';
+                    $fieldType = $field['field_type'] ?? 'unknown';
+                    $body .= "  • Field: {$fieldName}\n";
+                    $body .= "    Question: {$question}\n";
+                    $body .= "    Type: {$fieldType}\n\n";
+                }
+            }
+
+            // Show lead details
+            $body .= "LEAD DETAILS:\n";
+            $body .= "  • ID: {$lead->id}\n";
+            $body .= "  • Company: {$lead->company}\n";
+            $body .= "  • Source URL: {$lead->source_url}\n";
+            if (!empty($lead->company_website)) {
+                $body .= "  • Company Website: {$lead->company_website}\n";
+            }
+            if (!empty($lead->company_linkedin_url)) {
+                $body .= "  • Company LinkedIn: {$lead->company_linkedin_url}\n";
+            }
+            $body .= "\n";
+
+            $body .= str_repeat("-", 80) . "\n";
+            $body .= "END DEBUG INFORMATION\n";
+            $body .= str_repeat("-", 80) . "\n";
+        }
+
         return $body;
+    }
+
+    /**
+     * Get responses for discovered fields by checking user preferences and generating smart defaults
+     */
+    protected function getDiscoveredFieldResponses(array $discoveredFields, array $formData, array $customResponses): array
+    {
+        $responses = [];
+        $userId = auth()->id();
+
+        foreach ($discoveredFields as $field) {
+            $fieldName = $field['field_name'] ?? '';
+            $question = $field['question'] ?? '';
+            $fieldType = $field['field_type'] ?? 'text';
+
+            // Skip if we already have this in custom responses
+            if (isset($customResponses[$question])) {
+                continue;
+            }
+
+            // Try to get existing user preference
+            $preference = null;
+            if ($userId) {
+                $preference = UserFormPreference::where('user_id', $userId)
+                    ->where('field_identifier', $fieldName)
+                    ->first();
+            }
+
+            if ($preference) {
+                // Use existing preference
+                $responses[$question] = $this->formatPreferenceResponse($preference);
+            } else {
+                // Check if we should use smart defaults or prompt user
+                if (env('AUTO_GENERATE_FIELD_RESPONSES', true)) {
+                    // Generate smart default based on field type and name
+                    $smartDefault = $this->generateSmartDefault($field, $formData);
+                    if ($smartDefault) {
+                        $responses[$question] = $smartDefault;
+                    }
+                } else {
+                    // Mark this field as needing user input (for future enhancement)
+                    // For now, skip unanswered fields
+                    Log::info("Skipping unanswered field - user preference needed", [
+                        'field_name' => $fieldName,
+                        'question' => $question,
+                        'field_type' => $fieldType
+                    ]);
+                }
+            }
+        }
+
+        return array_filter($responses); // Remove empty responses
+    }
+
+    /**
+     * Get fields that need user input (for UI prompting)
+     */
+    public function getFieldsNeedingUserInput(Lead $lead, int $userId): array
+    {
+        $discoveredFields = $this->getOrDiscoverFormFields($lead);
+        $fieldsNeedingInput = [];
+
+        foreach ($discoveredFields as $field) {
+            $fieldName = $field['field_name'] ?? '';
+
+            // Check if user has existing preference
+            $preference = UserFormPreference::where('user_id', $userId)
+                ->where('field_identifier', $fieldName)
+                ->first();
+
+            if (!$preference) {
+                $fieldsNeedingInput[] = [
+                    'field_name' => $fieldName,
+                    'question' => $field['question'] ?? '',
+                    'field_type' => $field['field_type'] ?? 'text',
+                    'options' => $field['options'] ?? null,
+                    'suggested_answer' => $this->generateSmartDefault($field, [])
+                ];
+            }
+        }
+
+        return $fieldsNeedingInput;
+    }
+
+
+    /**
+     * Generate smart defaults for unknown fields based on common patterns
+     */
+    protected function generateSmartDefault(array $field, array $formData): ?string
+    {
+        $fieldName = strtolower($field['field_name'] ?? '');
+        $question = strtolower($field['question'] ?? '');
+        $fieldType = $field['field_type'] ?? 'text';
+
+        // Work authorization patterns
+        if (str_contains($fieldName, 'work_auth') || str_contains($question, 'authorized to work')) {
+            return "Yes, I am authorized to work in the United States";
+        }
+
+        // Visa sponsorship patterns
+        if (str_contains($fieldName, 'visa') || str_contains($question, 'sponsorship')) {
+            return "I do not require visa sponsorship";
+        }
+
+        // Security clearance patterns
+        if (str_contains($fieldName, 'clearance') || str_contains($question, 'security clearance')) {
+            return "I do not currently hold a security clearance but am eligible to obtain one";
+        }
+
+        // Salary expectations
+        if (str_contains($fieldName, 'salary') || str_contains($question, 'compensation')) {
+            return "I am open to discussing compensation based on the role's responsibilities and market rates";
+        }
+
+        // Start date / availability
+        if (str_contains($fieldName, 'start') || str_contains($question, 'availability')) {
+            return "I am available to start within 2-4 weeks notice";
+        }
+
+        // Relocation
+        if (str_contains($fieldName, 'relocate') || str_contains($question, 'willing to relocate')) {
+            return "I am open to relocation for the right opportunity";
+        }
+
+        // Remote work
+        if (str_contains($fieldName, 'remote') || str_contains($question, 'remote work')) {
+            return "I am flexible with remote, hybrid, or on-site work arrangements";
+        }
+
+        // Years of experience
+        if (str_contains($fieldName, 'experience') || str_contains($question, 'years of experience')) {
+            $experience = $formData['experience'] ?? [];
+            $totalYears = count($experience); // Simple calculation
+            return "I have {$totalYears}+ years of relevant experience";
+        }
+
+        // Boolean fields default to positive
+        if ($fieldType === 'boolean') {
+            return "Yes";
+        }
+
+        // For other text fields, return null to skip
+        return null;
     }
 
     /**
@@ -393,7 +708,14 @@ class JobApplicationService
      */
     protected function formatPreferenceResponse(UserFormPreference $preference): ?string
     {
+        // Handle both new JSON format and legacy format
         $responseData = $preference->response_data;
+        if (is_string($responseData) && str_starts_with($responseData, '{')) {
+            $decoded = json_decode($responseData, true);
+            if (json_last_error() === JSON_ERROR_NONE && isset($decoded['value'])) {
+                $responseData = $decoded['value'];
+            }
+        }
 
         switch ($preference->field_identifier) {
             case 'work_authorization':
@@ -449,21 +771,237 @@ class JobApplicationService
     }
 
     /**
-     * Send via user's Gmail account (Phase 2 implementation)
+     * Send via user's Gmail account using Gmail API
      */
     protected function sendViaUserEmail(JobApplication $application, array $contacts, array $emailContent): int
     {
         $user = $application->user;
+        $emailsSent = 0;
 
-        Log::info("Would send via user's Gmail account", [
-            'user_id' => $user->id,
-            'user_email' => $user->email,
-            'contacts' => count($contacts)
-        ]);
+        try {
+            // Get user's Google OAuth token using DB facade (temporary workaround)
+            $tokenData = \DB::table('user_oauth_tokens')
+                ->where('user_id', $user->id)
+                ->where('provider', 'google')
+                ->first();
 
-        // TODO: Implement Gmail API sending
-        // For now, simulate success
-        return count($contacts);
+            if (!$tokenData) {
+                Log::error("No Google OAuth token found for user", [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email
+                ]);
+                return 0;
+            }
+
+            // Convert to object for easier access
+            $oauthToken = (object) [
+                'access_token' => $tokenData->access_token,
+                'refresh_token' => $tokenData->refresh_token,
+                'expires_at' => $tokenData->expires_at ? \Carbon\Carbon::parse($tokenData->expires_at) : null,
+                'scopes' => $tokenData->scopes ? json_decode($tokenData->scopes, true) : []
+            ];
+
+            // Initialize Google Client
+            $client = new Google_Client();
+            $client->setClientId(env('GOOGLE_CLIENT_ID'));
+            $client->setClientSecret(env('GOOGLE_CLIENT_SECRET'));
+            $client->setAccessToken($oauthToken->access_token);
+
+            // Check if token is expired and refresh if needed
+            if ($client->isAccessTokenExpired()) {
+                Log::info("Google OAuth token is expired, attempting refresh", [
+                    'user_id' => $user->id,
+                    'expired_at' => $oauthToken->expires_at
+                ]);
+
+                if (!$oauthToken->refresh_token) {
+                    Log::error("No refresh token available, user needs to re-authenticate", [
+                        'user_id' => $user->id
+                    ]);
+                    return 0;
+                }
+
+                try {
+                    // Refresh the access token
+                    $newToken = $client->fetchAccessTokenWithRefreshToken($oauthToken->refresh_token);
+
+                    if (isset($newToken['error'])) {
+                        Log::error("Failed to refresh Google OAuth token", [
+                            'user_id' => $user->id,
+                            'error' => $newToken['error'],
+                            'error_description' => $newToken['error_description'] ?? null
+                        ]);
+                        return 0;
+                    }
+
+                    // Update the token in database
+                    \DB::table('user_oauth_tokens')
+                        ->where('user_id', $user->id)
+                        ->where('provider', 'google')
+                        ->update([
+                            'access_token' => $newToken['access_token'],
+                            'expires_at' => isset($newToken['expires_in'])
+                                ? now()->addSeconds($newToken['expires_in'])
+                                : null,
+                            'updated_at' => now()
+                        ]);
+
+                    // Update local object
+                    $oauthToken->access_token = $newToken['access_token'];
+                    $client->setAccessToken($newToken['access_token']);
+
+                    Log::info("Successfully refreshed Google OAuth token", [
+                        'user_id' => $user->id,
+                        'new_expires_at' => isset($newToken['expires_in'])
+                            ? now()->addSeconds($newToken['expires_in'])->toDateTimeString()
+                            : 'unknown'
+                    ]);
+
+                } catch (\Exception $e) {
+                    Log::error("Exception while refreshing Google OAuth token", [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage()
+                    ]);
+                    return 0;
+                }
+            }
+
+            // Check if token has Gmail send permission
+            $hasGmailScope = in_array('https://www.googleapis.com/auth/gmail.send', $oauthToken->scopes);
+            if (!$hasGmailScope) {
+                Log::error("User OAuth token doesn't have Gmail send permission", [
+                    'user_id' => $user->id,
+                    'scopes' => $oauthToken->scopes
+                ]);
+                return 0;
+            }
+
+            // Initialize Gmail service
+            $gmail = new Google_Service_Gmail($client);
+
+            Log::info("Sending via user's Gmail account", [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'contacts' => count($contacts)
+            ]);
+
+            // Determine recipients based on TEST_EMAIL_MODE
+            $recipients = [];
+            if (env('TEST_EMAIL_MODE', true)) {
+                // Test mode: send only to test email
+                $recipients = [['email' => 'mattcieslak93@gmail.com', 'type' => 'Test Email']];
+                Log::info("Gmail API test mode enabled - sending to test email only", [
+                    'user_id' => $user->id,
+                    'test_email' => 'mattcieslak93@gmail.com',
+                    'discovered_contacts' => count($contacts)
+                ]);
+            } else {
+                // Production mode: send to discovered contacts
+                $recipients = $contacts;
+                Log::info("Gmail API production mode - sending to discovered contacts", [
+                    'user_id' => $user->id,
+                    'recipients' => count($contacts)
+                ]);
+            }
+
+            // Send email to each recipient
+            foreach ($recipients as $contact) {
+                try {
+                    $rawMessage = $this->createGmailMessage(
+                        $user->email,
+                        $contact['email'],
+                        $emailContent['subject'],
+                        $emailContent['body'],
+                        $emailContent['resume_path'] ?? null,
+                        $emailContent['resume_name'] ?? 'resume.pdf'
+                    );
+
+                    $message = new Google_Service_Gmail_Message();
+                    $message->setRaw($rawMessage);
+
+                    $gmail->users_messages->send('me', $message);
+                    $emailsSent++;
+
+                    Log::info("Gmail API email sent successfully", [
+                        'user_id' => $user->id,
+                        'recipient' => $contact['email'],
+                        'contact_type' => $contact['type']
+                    ]);
+
+                } catch (\Exception $e) {
+                    Log::error("Failed to send Gmail API email to contact", [
+                        'user_id' => $user->id,
+                        'recipient' => $contact['email'],
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            if ($emailsSent > 0) {
+                Log::info("Gmail API emails sent successfully", [
+                    'user_id' => $user->id,
+                    'emails_sent' => $emailsSent,
+                    'test_email_mode' => env('TEST_EMAIL_MODE', true),
+                    'recipients' => env('TEST_EMAIL_MODE', true) ? ['mattcieslak93@gmail.com'] : array_column($contacts, 'email'),
+                    'total_contacts' => count($contacts)
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            Log::error("Gmail API sending failed", [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+
+        return $emailsSent;
+    }
+
+    /**
+     * Create a properly formatted Gmail message with optional attachment
+     */
+    protected function createGmailMessage(string $from, string $to, string $subject, string $body, ?string $resumePath = null, string $resumeName = 'resume.pdf'): string
+    {
+        $boundary = uniqid(rand(), true);
+
+        // Start with headers
+        $message = "From: {$from}\r\n";
+        $message .= "To: {$to}\r\n";
+        $message .= "Subject: {$subject}\r\n";
+        $message .= "MIME-Version: 1.0\r\n";
+        $message .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n\r\n";
+
+        // Add text body
+        $message .= "--{$boundary}\r\n";
+        $message .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $message .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
+        $message .= $body . "\r\n\r\n";
+
+        // Add resume attachment if provided
+        if ($resumePath && file_exists(storage_path('app/' . $resumePath))) {
+            $fileContent = file_get_contents(storage_path('app/' . $resumePath));
+            $encodedContent = base64_encode($fileContent);
+
+            $message .= "--{$boundary}\r\n";
+            $message .= "Content-Type: application/pdf; name=\"{$resumeName}\"\r\n";
+            $message .= "Content-Disposition: attachment; filename=\"{$resumeName}\"\r\n";
+            $message .= "Content-Transfer-Encoding: base64\r\n\r\n";
+            $message .= chunk_split($encodedContent, 76, "\r\n");
+        }
+
+        $message .= "--{$boundary}--";
+
+        // Base64url encode the entire message
+        return $this->base64UrlEncode($message);
+    }
+
+    /**
+     * Base64url encoding (Gmail API requirement)
+     */
+    protected function base64UrlEncode(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
     }
 
     /**
@@ -474,21 +1012,52 @@ class JobApplicationService
         $emailsSent = 0;
         $sendgrid = new SendGrid(env('SENDGRID_API_KEY'));
 
-        // For testing, send to mattcieslak93@gmail.com instead of discovered contacts
         $email = new Mail();
         $email->setFrom("hq@appliflow.ai", $application->form_data_sent['personal']['full_name']);
         $email->setSubject($emailContent['subject']);
-        $email->addTo("mattcieslak93@gmail.com");
+
+        // Check if in test email mode
+        if (env('TEST_EMAIL_MODE', true)) {
+            // Send to test email only
+            $email->addTo("mattcieslak93@gmail.com");
+        } else {
+            // Send to discovered contacts or fallback to test email
+            if (!empty($contacts)) {
+                foreach ($contacts as $contact) {
+                    $email->addTo($contact['email']);
+                }
+            } else {
+                // Fallback to test email if no contacts discovered
+                $email->addTo("mattcieslak93@gmail.com");
+                Log::warning("No discovered contacts found, sending to fallback email", [
+                    'application_id' => $application->id,
+                    'lead_id' => $application->lead_id
+                ]);
+            }
+        }
         $email->addContent("text/plain", $emailContent['body']);
 
         // Attach resume if available
         if (!empty($emailContent['resume_path']) && file_exists(storage_path('app/' . $emailContent['resume_path']))) {
+            $resumeContent = file_get_contents(storage_path('app/' . $emailContent['resume_path']));
             $email->addAttachment(
-                base64_encode(file_get_contents(storage_path('app/' . $emailContent['resume_path']))),
+                base64_encode($resumeContent),
                 "application/pdf",
                 $emailContent['resume_name'],
                 "attachment"
             );
+
+            Log::info("Resume attachment added", [
+                'application_id' => $application->id,
+                'resume_name' => $emailContent['resume_name'],
+                'resume_size' => strlen($resumeContent)
+            ]);
+        } else {
+            Log::warning("Resume file not found or path empty", [
+                'application_id' => $application->id,
+                'resume_path' => $emailContent['resume_path'] ?? 'null',
+                'expected_full_path' => !empty($emailContent['resume_path']) ? storage_path('app/' . $emailContent['resume_path']) : 'null'
+            ]);
         }
 
         try {
@@ -499,7 +1068,8 @@ class JobApplicationService
                 Log::info("AppliFlow email sent successfully", [
                     'application_id' => $application->id,
                     'method' => 'appliflow',
-                    'test_email' => 'mattcieslak93@gmail.com',
+                    'test_email_mode' => env('TEST_EMAIL_MODE', true),
+                    'recipients' => env('TEST_EMAIL_MODE', true) ? ['mattcieslak93@gmail.com'] : array_column($contacts, 'email'),
                     'discovered_contacts' => count($contacts)
                 ]);
             } else {
@@ -608,7 +1178,15 @@ class JobApplicationService
             })->toArray(),
             'custom' => $customResponses
         ];
-        
+
+        // Add discovered fields and their responses
+        $discoveredFields = $this->getOrDiscoverFormFields($lead);
+        if (!empty($discoveredFields)) {
+            $discoveredResponses = $this->getDiscoveredFieldResponses($discoveredFields, $baseData, $customResponses);
+            $baseData['discovered_fields'] = $discoveredFields;
+            $baseData['discovered_responses'] = $discoveredResponses;
+        }
+
         return $baseData;
     }
 
@@ -700,8 +1278,144 @@ class JobApplicationService
      */
     protected function extractDomainFromUrl(string $url): string
     {
+        // If URL doesn't have a scheme, add one for parse_url to work
+        if (!preg_match('/^https?:\/\//', $url)) {
+            $url = 'https://' . $url;
+        }
+
         $parsed = parse_url($url);
-        return $parsed['host'] ?? '';
+        $host = $parsed['host'] ?? '';
+
+        // Remove www. prefix if present
+        $host = preg_replace('/^www\./', '', $host);
+
+        return $host;
+    }
+
+    /**
+     * Known job board domains to filter out
+     */
+    protected function getJobBoardDomains(): array
+    {
+        return [
+            'apply.workable.com',
+            'workable.com',
+            'greenhouse.io',
+            'lever.co',
+            'apply.lever.co',
+            'jobs.lever.co',
+            'myworkdayjobs.com',
+            'workday.com',
+            'smartrecruiters.com',
+            'jobs.smartrecruiters.com',
+            'icims.com',
+            'breezy.hr',
+            'recruiting.ultipro.com',
+            'paycomonline.com',
+            'taleo.net',
+            'oraclecloud.com',
+            'successfactors.com',
+            'sap.com',
+            'applytojob.com',
+            'bamboohr.com',
+            'jobvite.com',
+            'recruiterbox.com',
+            'indeed.com',
+            'linkedin.com',
+            'monster.com',
+            'ziprecruiter.com',
+            'glassdoor.com',
+            'dice.com',
+            'careerbuilder.com',
+            'simplyhired.com',
+            'jobs.com',
+            'snagajob.com',
+        ];
+    }
+
+    /**
+     * Check if a domain is a job board (including subdomains)
+     */
+    protected function isJobBoardDomain(string $domain): bool
+    {
+        $jobBoardDomains = $this->getJobBoardDomains();
+
+        // Direct match
+        if (in_array($domain, $jobBoardDomains)) {
+            return true;
+        }
+
+        // Check if domain ends with any job board domain (catches subdomains)
+        // e.g., fmr.wd1.myworkdayjobs.com ends with myworkdayjobs.com
+        foreach ($jobBoardDomains as $jobBoard) {
+            if (str_ends_with($domain, '.' . $jobBoard) || str_ends_with($domain, $jobBoard)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Extract company domain from Lead data, filtering out job board domains
+     */
+    protected function extractCompanyDomain(Lead $lead): ?string
+    {
+        // Priority 1: Check company_website field
+        if (!empty($lead->company_website)) {
+            $domain = $this->extractDomainFromUrl($lead->company_website);
+            if ($domain && !$this->isJobBoardDomain($domain)) {
+                Log::info("Using company website domain", ['domain' => $domain]);
+                return $domain;
+            }
+        }
+
+        // Priority 2: Check company_linkedin_url for domain hints
+        if (!empty($lead->company_linkedin_url)) {
+            // Try to extract domain from LinkedIn URL pattern
+            // Sometimes LinkedIn URLs contain company slugs we can use
+            $domain = $this->extractDomainFromUrl($lead->company_linkedin_url);
+            if ($domain === 'linkedin.com' || $domain === 'www.linkedin.com') {
+                // Extract company slug from LinkedIn and try to guess domain
+                if (preg_match('/linkedin\.com\/company\/([^\/]+)/', $lead->company_linkedin_url, $matches)) {
+                    $companySlug = $matches[1];
+                    // This is a guess - may not always work
+                    $guessedDomain = str_replace('-', '', $companySlug) . '.com';
+                    Log::info("Guessed domain from LinkedIn slug", [
+                        'slug' => $companySlug,
+                        'guessed_domain' => $guessedDomain
+                    ]);
+                    // Mark this as low confidence
+                }
+            }
+        }
+
+        // Priority 3: Check source_url, but filter out job boards
+        if (!empty($lead->source_url)) {
+            $domain = $this->extractDomainFromUrl($lead->source_url);
+            if ($domain && !$this->isJobBoardDomain($domain)) {
+                Log::info("Using source URL domain (not a job board)", ['domain' => $domain]);
+                return $domain;
+            } else {
+                Log::info("Source URL is a job board, skipping", ['domain' => $domain]);
+            }
+        }
+
+        // Priority 4: Try to extract from apply_url
+        if (!empty($lead->apply_url)) {
+            $domain = $this->extractDomainFromUrl($lead->apply_url);
+            if ($domain && !$this->isJobBoardDomain($domain)) {
+                Log::info("Using apply URL domain (not a job board)", ['domain' => $domain]);
+                return $domain;
+            }
+        }
+
+        Log::warning("Could not extract valid company domain from Lead data", [
+            'lead_id' => $lead->id,
+            'company' => $lead->company
+        ]);
+
+        return null;
     }
     
     // NOTE: getStrategyReason method removed - no longer needed with email-based approach
@@ -726,18 +1440,87 @@ class JobApplicationService
     }
     
     /**
-     * Discover form fields for email content generation (optional)
-     * This can still be useful for gathering required information from job postings
+     * Discover form fields for email content generation
+     * Analyzes job posting to find common application requirements
      */
     protected function discoverFormFieldsForEmail(Lead $lead): array
     {
-        // This method could optionally analyze the job posting to discover
-        // what information employers typically ask for, which can then be
-        // used to prompt users for missing data or enhance email content.
-        // For now, we'll rely on the existing user_form_preferences system.
+        try {
+            // Prepare job context for field discovery
+            $jobContext = "Company: " . ($lead->company ?? 'Unknown');
+            $jobContext .= "\nPosition: " . $lead->job_title;
+            $jobContext .= "\nJob URL: " . $lead->source_url;
 
-        $this->logStep(null, "Form field discovery for email content is optional in email-based approach");
+            if ($lead->description) {
+                $jobContext .= "\nJob Description: " . substr($lead->description, 0, 2000);
+            }
+
+            Log::info("Discovering form fields for lead", [
+                'lead_id' => $lead->id,
+                'company' => $lead->company,
+                'title' => $lead->job_title
+            ]);
+
+            $response = OpenAI::chat()->create([
+                'model' => 'gpt-4',
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => "Analyze this job posting and identify specific application questions/requirements that employers commonly ask beyond basic contact info and resume. Return as JSON array with objects containing 'field_name', 'question', 'field_type' (text/select/boolean), and 'options' (for select fields). Focus on: work authorization, security clearance, certifications, salary expectations, availability, specific skills, etc.\n\n{$jobContext}"
+                    ]
+                ],
+                'max_tokens' => 800,
+                'temperature' => 0.1
+            ]);
+
+            $content = $response->choices[0]->message->content;
+            $discoveredFields = json_decode($content, true);
+
+            if (is_array($discoveredFields) && !empty($discoveredFields)) {
+                Log::info("Discovered form fields", [
+                    'lead_id' => $lead->id,
+                    'fields_count' => count($discoveredFields),
+                    'fields' => $discoveredFields,
+                    'api_cost_estimate' => '$0.008-0.016'
+                ]);
+
+                // Store discovered fields for this lead
+                $this->storeDiscoveredFields($lead, $discoveredFields);
+
+                return $discoveredFields;
+            }
+
+        } catch (\Exception $e) {
+            Log::warning("Form field discovery failed: " . $e->getMessage(), [
+                'lead_id' => $lead->id
+            ]);
+        }
+
         return [];
+    }
+
+    /**
+     * Store discovered fields for future use
+     */
+    protected function storeDiscoveredFields(Lead $lead, array $fields): void
+    {
+        try {
+            // Update the lead with discovered fields
+            $lead->update([
+                'discovered_fields' => $fields,
+                'fields_discovered_at' => now()
+            ]);
+
+            Log::info("Stored discovered fields for lead", [
+                'lead_id' => $lead->id,
+                'fields_count' => count($fields)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::warning("Failed to store discovered fields: " . $e->getMessage(), [
+                'lead_id' => $lead->id
+            ]);
+        }
     }
     
     /**

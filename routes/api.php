@@ -54,12 +54,22 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/automation/status/{sessionKey}', [\App\Http\Controllers\Api\JobApplicationController::class, 'getApplicationStatus']);
     Route::post('/automation/submit-missing-fields', [\App\Http\Controllers\Api\JobApplicationController::class, 'submitMissingFields']);
     Route::post('/automation/submit-application', [\App\Http\Controllers\Api\JobApplicationController::class, 'submitApplication']);
+
+    // NEW: Email-based application endpoints
+    Route::post('/automation/process-email-application', [\App\Http\Controllers\Api\JobApplicationController::class, 'processEmailApplication']);
+    Route::post('/automation/submit-preferences-and-apply', [\App\Http\Controllers\Api\JobApplicationController::class, 'submitPreferencesAndApply']);
     
     // Form Preferences protected endpoints  
     Route::get('/form-preferences', [FormPreferenceController::class, 'getUserPreferences']);
     Route::post('/form-preferences/find', [FormPreferenceController::class, 'findPreference']);
     Route::patch('/form-preferences/confidence', [FormPreferenceController::class, 'updateConfidence']);
     
+    // Admin routes - Super Admin only
+    Route::prefix('admin')->group(function () {
+        Route::get('/scheduler-stats', [\App\Http\Controllers\Api\Admin\SchedulerStatsController::class, 'index']);
+        Route::get('/scheduler-stats/summary', [\App\Http\Controllers\Api\Admin\SchedulerStatsController::class, 'summary']);
+    });
+
     // Debug route to test authentication
     Route::get('/test-auth', function() {
         \Log::info('Test auth route hit', ['user_id' => \Auth::id(), 'authenticated' => \Auth::check()]);

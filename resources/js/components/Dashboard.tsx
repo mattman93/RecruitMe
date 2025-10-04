@@ -191,9 +191,10 @@ const fetchUserInfo = async () => {
 
             {/* Email Toggle */}
             {userEmail && (
-              <div className="flex items-center justify-center space-x-3 p-4 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200 max-w-md mx-auto">
+              <div className="flex items-center justify-center space-x-3 p-4 py-10 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200 max-w-md mx-auto" 
+                    style={{ marginBottom: '3%', padding: '3%'}}>
                 <Mail className="h-4 w-4 text-gray-600" />
-                <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700" style={{padding: '2%'}}>
                   Applying from {userEmail}
                 </Label>
                 <Switch

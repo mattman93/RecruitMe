@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UserOAuthToken;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
@@ -17,7 +18,11 @@ class GoogleOAuthController extends Controller
     {
         return Socialite::driver('google')
             ->scopes(['openid', 'profile', 'email', 'https://www.googleapis.com/auth/gmail.send'])
-            ->with(['prompt' => 'select_account'])
+            ->with([
+                'prompt' => 'consent', // Changed from 'select_account' to force consent screen
+                'access_type' => 'offline', // Request refresh token
+                'include_granted_scopes' => 'true' // Include previously granted scopes
+            ])
             ->redirect();
     }
 
@@ -95,7 +100,7 @@ class GoogleOAuthController extends Controller
             'access_token' => $googleUser->token,
             'refresh_token' => $googleUser->refreshToken,
             'expires_at' => $googleUser->expiresIn ? now()->addSeconds($googleUser->expiresIn) : null,
-            'scopes' => json_encode(['gmail.send', 'profile', 'email']),
+            'scopes' => json_encode(['https://www.googleapis.com/auth/gmail.send', 'profile', 'email']),
         ];
 
         // For now, log the tokens (in production, store in database)
@@ -107,8 +112,37 @@ class GoogleOAuthController extends Controller
             'scopes' => 'gmail.send,profile,email'
         ]);
 
-        // TODO: Store in database table for production use
-        // UserOAuthToken::updateOrCreate(['user_id' => $user->id, 'provider' => 'google'], $tokenData);
+        // Store tokens in database using DB facade (workaround for Eloquent issue)
+        $existingToken = \DB::table('user_oauth_tokens')
+            ->where('user_id', $user->id)
+            ->where('provider', 'google')
+            ->first();
+
+        if ($existingToken) {
+            \DB::table('user_oauth_tokens')
+                ->where('user_id', $user->id)
+                ->where('provider', 'google')
+                ->update([
+                    'provider_user_id' => $tokenData['provider_user_id'],
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'expires_at' => $tokenData['expires_at'],
+                    'scopes' => $tokenData['scopes'],
+                    'updated_at' => now()
+                ]);
+        } else {
+            \DB::table('user_oauth_tokens')->insert([
+                'user_id' => $tokenData['user_id'],
+                'provider' => $tokenData['provider'],
+                'provider_user_id' => $tokenData['provider_user_id'],
+                'access_token' => $tokenData['access_token'],
+                'refresh_token' => $tokenData['refresh_token'],
+                'expires_at' => $tokenData['expires_at'],
+                'scopes' => $tokenData['scopes'],
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+        }
     }
 
     /**

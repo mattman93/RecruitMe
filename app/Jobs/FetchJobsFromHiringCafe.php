@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\DataSource;
 use App\Models\Lead;
+use App\Models\SchedulerRun;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -24,6 +25,7 @@ class FetchJobsFromHiringCafe implements ShouldQueue
     private $duplicatesSkipped = 0;
     private $errorsEncountered = 0;
     private $currentJobTitle = '';
+    private $schedulerRun = null;
 
     public function __construct(){}
 
@@ -31,8 +33,12 @@ class FetchJobsFromHiringCafe implements ShouldQueue
     {
         Log::info('Starting FetchJobsFromHiringCafe job');
 
-        // Jitter is now handled by the scheduler, not the job
-        Log::info("Starting job execution immediately");
+        // Create scheduler run record
+        $this->schedulerRun = SchedulerRun::create([
+            'job_name' => 'FetchJobsFromHiringCafe',
+            'status' => 'success',
+            'started_at' => now(),
+        ]);
 
         try {
             // Get the hiring.cafe data source
@@ -43,6 +49,11 @@ class FetchJobsFromHiringCafe implements ShouldQueue
             if (!$this->dataSource) {
                 Log::error('hiring.cafe data source not found or inactive');
                 $this->sendErrorEmail('Data source not found', 'hiring.cafe data source is not configured or inactive');
+                $this->schedulerRun->update([
+                    'status' => 'failed',
+                    'error_message' => 'Data source not found',
+                    'completed_at' => now(),
+                ]);
                 return;
             }
 
@@ -50,6 +61,10 @@ class FetchJobsFromHiringCafe implements ShouldQueue
             if (!$this->dataSource->withinRateLimit()) {
                 Log::info('Rate limit exceeded for hiring.cafe, skipping this run');
                 $this->sendRateLimitEmail();
+                $this->schedulerRun->update([
+                    'status' => 'rate_limited',
+                    'completed_at' => now(),
+                ]);
                 return;
             }
 
@@ -62,11 +77,35 @@ class FetchJobsFromHiringCafe implements ShouldQueue
             // Send email with results (success or partial success)
             $this->sendCompletionEmail();
 
+            // Update scheduler run with final stats
+            $this->schedulerRun->update([
+                'status' => $this->errorsEncountered > 0 ? 'failed' : 'success',
+                'search_term_used' => $this->currentJobTitle,
+                'jobs_collected' => $this->jobsCollected,
+                'duplicates_skipped' => $this->duplicatesSkipped,
+                'errors_encountered' => $this->errorsEncountered,
+                'total_jobs_in_db' => Lead::count(),
+                'completed_at' => now(),
+            ]);
+
             Log::info("FetchJobsFromHiringCafe completed. Jobs collected: {$this->jobsCollected}, Duplicates skipped: {$this->duplicatesSkipped}, Errors: {$this->errorsEncountered}");
 
         } catch (\Exception $e) {
             Log::error('FetchJobsFromHiringCafe failed: ' . $e->getMessage());
             $this->sendErrorEmail('Job execution failed', $e->getMessage());
+
+            // Update scheduler run with error
+            if ($this->schedulerRun) {
+                $this->schedulerRun->update([
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                    'jobs_collected' => $this->jobsCollected,
+                    'duplicates_skipped' => $this->duplicatesSkipped,
+                    'errors_encountered' => $this->errorsEncountered,
+                    'completed_at' => now(),
+                ]);
+            }
+
             throw $e;
         }
     }
@@ -360,47 +399,31 @@ class FetchJobsFromHiringCafe implements ShouldQueue
     {
         $totalJobs = Lead::count();
         $hasErrors = $this->errorsEncountered > 0;
-        
+
         $statusEmoji = $hasErrors ? '⚠️' : '✅';
         $statusText = $hasErrors ? 'Completed with Errors' : 'Successfully Completed';
-        
-        $subject = "{$statusEmoji} Hiring.cafe Job Fetch {$statusText} - {$this->jobsCollected} jobs collected";
-        $message = "
-            <h2>{$statusEmoji} Hiring.cafe Job Fetch Report</h2>
-            <p><strong>Status:</strong> {$statusText}</p>
-            <p><strong>Search Term Used:</strong> {$this->currentJobTitle}</p>
-            <p><strong>Jobs collected this run:</strong> {$this->jobsCollected}</p>
-            <p><strong>Duplicates skipped:</strong> {$this->duplicatesSkipped}</p>
-            " . ($hasErrors ? "<p><strong>⚠️ Errors encountered:</strong> {$this->errorsEncountered} (check logs for details)</p>" : "") . "
-            <p><strong>Total jobs in database:</strong> {$totalJobs}</p>
-            <p><strong>Timestamp:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>
-            
-            <hr>
-            <p><em>This is an automated message from AppliFlow job collection system.</em></p>
-        ";
 
-        $this->sendEmail('mattcieslak93@gmail.com', $subject, $message);
+        // Log instead of emailing - admins can view via DataIngestionStats page
+        Log::info("{$statusEmoji} Hiring.cafe Job Fetch {$statusText}", [
+            'status' => $statusText,
+            'search_term' => $this->currentJobTitle,
+            'jobs_collected' => $this->jobsCollected,
+            'duplicates_skipped' => $this->duplicatesSkipped,
+            'errors_encountered' => $this->errorsEncountered,
+            'total_jobs_in_db' => $totalJobs
+        ]);
     }
 
     private function sendRateLimitEmail(): void
     {
         $nextAllowedTime = $this->dataSource->last_fetched_at?->copy()->addHour()?->format('H:i T') ?? 'Unknown';
-        
-        $subject = "⏱️ Hiring.cafe Job Fetch - Rate Limited";
-        $message = "
-            <h2>⏱️ Hiring.cafe Job Fetch Report</h2>
-            <p><strong>Status:</strong> Rate Limited - Skipped</p>
-            <p><strong>Reason:</strong> API rate limit not yet reset</p>
-            <p><strong>Last successful fetch:</strong> " . ($this->dataSource->last_fetched_at?->format('Y-m-d H:i:s T') ?? 'Never') . "</p>
-            <p><strong>Next attempt allowed after:</strong> {$nextAllowedTime}</p>
-            <p><strong>Timestamp:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>
-            
-            <hr>
-            <p><em>This is normal behavior to prevent API abuse. The job will successfully run when the rate limit resets.</em></p>
-            <p><em>This is an automated message from AppliFlow job collection system.</em></p>
-        ";
 
-        $this->sendEmail('mattcieslak93@gmail.com', $subject, $message);
+        // Log instead of emailing
+        Log::info('⏱️ Hiring.cafe Job Fetch - Rate Limited', [
+            'status' => 'Rate Limited - Skipped',
+            'last_fetch' => $this->dataSource->last_fetched_at?->format('Y-m-d H:i:s T') ?? 'Never',
+            'next_allowed' => $nextAllowedTime
+        ]);
     }
 
     private function sendSuccessEmail(): void
@@ -411,19 +434,29 @@ class FetchJobsFromHiringCafe implements ShouldQueue
 
     private function sendErrorEmail(string $errorType, string $errorMessage): void
     {
-        $subject = "ALERT: Hiring.cafe Job Fetch Error - {$errorType}";
-        $message = "
-            <h2>⚠️ Hiring.cafe Job Fetch Error</h2>
-            <p><strong>Error Type:</strong> {$errorType}</p>
-            <p><strong>Error Message:</strong> {$errorMessage}</p>
-            <p><strong>Jobs collected before error:</strong> {$this->jobsCollected}</p>
-            <p><strong>Timestamp:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>
-            
-            <hr>
-            <p><em>Please check the application logs and API status. Job collection has been stopped.</em></p>
-        ";
+        // Log error instead of emailing - only send email for critical errors
+        Log::error("ALERT: Hiring.cafe Job Fetch Error - {$errorType}", [
+            'error_type' => $errorType,
+            'error_message' => $errorMessage,
+            'jobs_collected_before_error' => $this->jobsCollected
+        ]);
 
-        $this->sendEmail('mattcieslak93@gmail.com', $subject, $message);
+        // Only send email for critical errors (API blocks, data source not found)
+        if (in_array($errorType, ['Data source not found', 'API Error - Potential IP Block'])) {
+            $subject = "ALERT: Hiring.cafe Job Fetch Error - {$errorType}";
+            $message = "
+                <h2>⚠️ Hiring.cafe Job Fetch Error</h2>
+                <p><strong>Error Type:</strong> {$errorType}</p>
+                <p><strong>Error Message:</strong> {$errorMessage}</p>
+                <p><strong>Jobs collected before error:</strong> {$this->jobsCollected}</p>
+                <p><strong>Timestamp:</strong> " . now()->format('Y-m-d H:i:s T') . "</p>
+
+                <hr>
+                <p><em>Please check the application logs and API status. Job collection has been stopped.</em></p>
+            ";
+
+            $this->sendEmail('mattcieslak93@gmail.com', $subject, $message);
+        }
     }
 
     private function sendEmail(string $to, string $subject, string $message): void
