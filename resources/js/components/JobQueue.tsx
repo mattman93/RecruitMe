@@ -383,8 +383,8 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
         </Badge>
       </div>
 
-      {/* FlowRank Badge, Email Toggle, and Apply Button */}
-      <div className="flex items-center gap-4" style={{ justifyContent: 'end' }}>
+      {/* FlowRank Badge (left), Email Toggle (center), Apply Button (right) */}
+      <div className="flex items-center gap-4">
         {/* FlowRank Badge */}
         <div className="flowrank-badge">
           <div className="flex items-center gap-2">
@@ -395,19 +395,24 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
           <span className="flowrank-number">125</span>
         </div>
 
-        {userEmail && hasGmailOAuth && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200">
-            <Mail className="h-4 w-4 text-gray-600" />
-            <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700 cursor-pointer">
-              Applying from {userEmail}
-            </Label>
-            <Switch
-              id="send-as-user"
-              checked={sendAsUser}
-              onCheckedChange={setSendAsUser}
-            />
-          </div>
-        )}
+        {/* Center spacer */}
+        <div className="flex-1 flex justify-center">
+          {userEmail && hasGmailOAuth && (
+            <div className="flex items-center gap-3 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200">
+              <Mail className="h-4 w-4 text-gray-600" />
+              <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Applying from {userEmail}
+              </Label>
+              <Switch
+                id="send-as-user"
+                checked={sendAsUser}
+                onCheckedChange={setSendAsUser}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Apply Button */}
         <Button
           onClick={handleApplicationMethod}
           disabled={isProcessing}
