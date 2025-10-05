@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileText, Download, Edit3, CheckCircle2, Mail } from "lucide-react";
+import { FileText, Download, Edit3, CheckCircle2, Mail, Edit2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -266,7 +266,14 @@ const fetchOAuthStatus = async () => {
               {uploadedResume ? (
                 <Card className="p-6">
                   <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-[#1A1A1A]">Resume</h2>
+                    {/* Header with Edit button */}
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-semibold text-[#1A1A1A]">Resume</h2>
+                      <button className="text-sm font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+                        <Edit2 className="h-4 w-4" />
+                        Edit
+                      </button>
+                    </div>
                     {/* File Info */}
                     <div className="flex items-center gap-4">
                       <div className="flex-shrink-0 p-3 bg-primary/10 rounded-lg">
@@ -288,17 +295,6 @@ const fetchOAuthStatus = async () => {
                       <Badge variant="secondary">
                         {getFileTypeDisplay(uploadedResume.type)}
                       </Badge>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-3 pt-4 border-t border-border">
-                      <Button
-                        variant="outline"
-                        className="flex-1 dashboard-card-text"
-                      >
-                        <Edit3 className="h-4 w-4 mr-2" />
-                        Replace
-                      </Button>
                     </div>
                   </div>
                 </Card>
