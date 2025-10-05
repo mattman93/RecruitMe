@@ -5,7 +5,6 @@ import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
-import { FilePreview } from "./FilePreview";
 import { JobQueue } from "./JobQueue";
 import { Footer } from "./Footer";
 import WorkExperience from "./WorkExperience";
@@ -40,6 +39,7 @@ export function Dashboard() {
   const [sendAsUser, setSendAsUser] = useState(true);
   const [userEmail, setUserEmail] = useState('');
   const [hasGmailOAuth, setHasGmailOAuth] = useState(false);
+  const [activeTab, setActiveTab] = useState<'matches' | 'applications' | 'settings'>('matches');
 
   useEffect(() => {
     fetchUploadedResume();
@@ -203,28 +203,47 @@ const fetchOAuthStatus = async () => {
     <div ref={ref} className="flex flex-col min-h-screen">
       <div className="flex-1 p-8">
         <div className="max-w-6xl mx-auto space-y-8">
-          {/* Header */}
-          <div className="text-center space-y-4 fade-in visible">
-            <h1 className="text-3xl font-bold text-[#1A1A1A]">Welcome to Your Job Dashboard</h1>
-            <p className="text-[#4A4A4A]">
-              Your resume is ready. Let's find you the perfect job opportunities.
-            </p>
-
-            {/* Email Toggle - Only show if user has Gmail OAuth integrated */}
-            {userEmail && hasGmailOAuth && (
-              <div className="flex items-center justify-center space-x-3 p-4 py-10 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200 max-w-md mx-auto"
-                    style={{ marginBottom: '3%', padding: '3%'}}>
-                <Mail className="h-4 w-4 text-gray-600" />
-                <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700" style={{padding: '2%'}}>
-                  Applying from {userEmail}
-                </Label>
-                <Switch
-                  id="send-as-user"
-                  checked={sendAsUser}
-                  onCheckedChange={setSendAsUser}
-                />
-              </div>
-            )}
+          {/* Tabs */}
+          <div className="flex items-center gap-8 border-b border-border">
+            <button
+              onClick={() => setActiveTab('matches')}
+              className={`pb-4 px-2 text-sm font-medium transition-colors relative ${
+                activeTab === 'matches'
+                  ? 'text-primary'
+                  : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+              }`}
+            >
+              Your Job Matches
+              {activeTab === 'matches' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('applications')}
+              className={`pb-4 px-2 text-sm font-medium transition-colors relative ${
+                activeTab === 'applications'
+                  ? 'text-primary'
+                  : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+              }`}
+            >
+              Your Applications
+              {activeTab === 'applications' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`pb-4 px-2 text-sm font-medium transition-colors relative ${
+                activeTab === 'settings'
+                  ? 'text-primary'
+                  : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+              }`}
+            >
+              Settings
+              {activeTab === 'settings' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+            </button>
           </div>
 
           {/* Main Content Grid */}
@@ -232,16 +251,12 @@ const fetchOAuthStatus = async () => {
             {/* Left Column - Resume Preview */}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold text-[#1A1A1A]">Your Resume</h2>
-                <Badge variant="outline" className="flex items-center gap-2 bg-primary border-primary text-primary-foreground">
-                  <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                  Ready
-                </Badge>
               </div>
 
               {uploadedResume ? (
                 <Card className="p-6">
                   <div className="space-y-4">
+                    <h2 className="text-2xl font-semibold text-[#1A1A1A]">Resume</h2>
                     {/* File Info */}
                     <div className="flex items-center gap-4">
                       <div className="flex-shrink-0 p-3 bg-primary/10 rounded-lg">
@@ -266,30 +281,11 @@ const fetchOAuthStatus = async () => {
                     <div className="flex gap-3 pt-4 border-t border-border">
                       <Button
                         variant="outline"
-                        onClick={handleDownloadResume}
-                        className="flex-1 dashboard-card-text"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Download
-                      </Button>
-                      <Button
-                        variant="outline"
                         className="flex-1 dashboard-card-text"
                       >
                         <Edit3 className="h-4 w-4 mr-2" />
                         Replace
                       </Button>
-                    </div>
-
-                    {/* File Preview Area */}
-                    <div className="mt-6">
-                      <FilePreview 
-                        fileUrl={`/api/user/file/${uploadedResume.id}`}
-                        fileName={uploadedResume.original_name}
-                        fileType={uploadedResume.type}
-                        fileSize={uploadedResume.size}
-                        uploadedAt={new Date(uploadedResume.created_at).toLocaleDateString()}
-                      />
                     </div>
                   </div>
                 </Card>

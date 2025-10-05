@@ -175,7 +175,24 @@ export function JobQueue() {
     return description.substring(0, maxLength) + '...';
   };
 
+  const getExperienceLevelBadgeStyle = (level: string) => {
+    const normalizedLevel = level.toLowerCase();
 
+    if (normalizedLevel.includes('entry') || normalizedLevel.includes('junior')) {
+      return { backgroundColor: '#dcfce7', color: '#15803d', borderColor: '#86efac' };
+    } else if (normalizedLevel.includes('mid') || normalizedLevel.includes('intermediate')) {
+      return { backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#93c5fd' };
+    } else if (normalizedLevel.includes('senior')) {
+      return { backgroundColor: '#f3e8ff', color: '#7e22ce', borderColor: '#d8b4fe' };
+    } else if (normalizedLevel.includes('lead') || normalizedLevel.includes('principal') || normalizedLevel.includes('staff')) {
+      return { backgroundColor: '#ffedd5', color: '#c2410c', borderColor: '#fed7aa' };
+    } else if (normalizedLevel.includes('executive') || normalizedLevel.includes('director') || normalizedLevel.includes('vp')) {
+      return { backgroundColor: '#fee2e2', color: '#b91c1c', borderColor: '#fecaca' };
+    }
+
+    // Default
+    return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#d1d5db' };
+  };
 
   const handleApplicationMethod = async () => {
     try {
@@ -265,8 +282,8 @@ export function JobQueue() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-[#1A1A1A]">Job Opportunities</h2>
+        <div className="flex items-center justify-between pt-8">
+          <h3 className="text-2xl font-semibold text-[#1A1A1A]">Job Matches</h3>
           <Badge variant="secondary" className="px-3 py-1">
             Loading...
           </Badge>
@@ -289,8 +306,8 @@ export function JobQueue() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-[#1A1A1A]">Job Opportunities</h2>
+        <div className="flex items-center justify-between pt-8">
+          <h3 className="text-2xl font-semibold text-[#1A1A1A]">Job Matches</h3>
         </div>
         <Card className="p-6 text-center">
           <p className="job-card-text">{error}</p>
@@ -348,9 +365,9 @@ export function JobQueue() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pt-8">
         <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-semibold text-[#1A1A1A]">Job Opportunities</h2>
+          <h3 className="text-2xl font-semibold text-[#1A1A1A]">Job Matches</h3>
           {isRelevantJobs && (
             <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white">
               AI Matched
@@ -395,9 +412,12 @@ export function JobQueue() {
                       {lead.job_title}
                     </h3>
                   </div>
-                  <Badge variant="outline" className="ml-2 flex-shrink-0">
+                  <span
+                    className="ml-2 flex-shrink-0 inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+                    style={getExperienceLevelBadgeStyle(lead.experience_level)}
+                  >
                     {lead.experience_level}
-                  </Badge>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 job-card-text">
                   <Building2 className="h-4 w-4" />
@@ -407,9 +427,9 @@ export function JobQueue() {
 
               {/* Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2 job-card-text">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="font-medium job-card-text">{lead.pay_range}</span>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-primary">{lead.pay_range}</span>
                 </div>
                 <div className="flex items-center gap-2 job-card-text">
                   <MapPin className="h-4 w-4 text-blue-600" />
