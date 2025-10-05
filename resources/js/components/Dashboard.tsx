@@ -154,6 +154,12 @@ const fetchOAuthStatus = async () => {
     return typeMap[mimeType] || 'Unknown';
   };
 
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  };
+
   const handleDownloadResume = () => {
     if (uploadedResume) {
       // Create download link
@@ -267,13 +273,16 @@ const fetchOAuthStatus = async () => {
                         <FileText className="h-8 w-8 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate dashboard-card-text">
+                        <p className="font-small text-sm truncate dashboard-card-text">
                           {uploadedResume.original_name}
                         </p>
-                        <div className="flex items-center gap-3 text-sm dashboard-card-text">
+                        <div className="flex items-center gap-3 text-xs dashboard-card-text">
                           <span>{formatFileSize(uploadedResume.size)}</span>
                           <span>•</span>
                           <span>{getFileTypeDisplay(uploadedResume.type)}</span>
+                        </div>
+                        <div className="text-xs dashboard-card-text mt-1">
+                          <span>Last Updated: {formatDate(uploadedResume.created_at)}</span>
                         </div>
                       </div>
                       <Badge variant="secondary">
