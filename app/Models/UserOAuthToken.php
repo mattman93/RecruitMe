@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UserOAuthToken extends Model
 {
+    protected $table = 'user_oauth_tokens';
+
     protected $fillable = [
         'user_id',
         'provider',

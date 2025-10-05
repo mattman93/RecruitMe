@@ -162,4 +162,22 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    public function getOAuthStatus(Request $request)
+    {
+        $user = Auth::user();
+
+        // Check if user has an active Google OAuth token
+        $hasGmailOAuth = $user->oauthTokens()
+            ->where('provider', 'google')
+            ->where(function($query) {
+                $query->whereNull('expires_at')
+                      ->orWhere('expires_at', '>', now());
+            })
+            ->exists();
+
+        return response()->json([
+            'hasGmailOAuth' => $hasGmailOAuth
+        ]);
+    }
 }

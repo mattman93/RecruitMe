@@ -35,7 +35,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/file/{id}', [\App\Http\Controllers\Api\UserController::class, 'downloadFile']);
     Route::get('/user/work-experience', [\App\Http\Controllers\Api\UserController::class, 'getWorkExperience']);
     Route::get('/user/application-form-data', [\App\Http\Controllers\Api\UserController::class, 'getApplicationFormData']);
-    
+    Route::get('/user/oauth-status', [\App\Http\Controllers\Api\UserController::class, 'getOAuthStatus']);
+
     // Resume Parsing API endpoints
     Route::apiResource('resume/parse', ApiResumeParseController::class);
     Route::post('/resume/parse/{id}/match', [ApiResumeParseController::class, 'matchJob']);

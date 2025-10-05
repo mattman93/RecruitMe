@@ -1143,7 +1143,7 @@ class JobApplicationService
                 'first_name' => $firstName,
                 'last_name' => $lastName,
                 'full_name' => $fullName,
-                'email' => $parsedResume?->email ?? $user->email,
+                'email' => $user->email ?? $parsedResume?->email,
                 'phone' => $parsedResume?->phone ?? $user->phone ?? null,
                 'linkedin_url' => $parsedResume?->linkedin_url ?? $user->linkedin_url ?? null,
                 'portfolio_url' => $parsedResume?->portfolio_url ?? $user->portfolio_url ?? null,

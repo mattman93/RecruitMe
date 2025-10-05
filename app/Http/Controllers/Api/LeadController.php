@@ -28,10 +28,15 @@ class LeadController extends Controller
             // Return AI-matched relevant jobs
             $leads = $this->jobMatchingService->findRelevantJobs($user->id, $limit);
             $enrichedLeads = $this->enrichLeadsWithStructureData($leads);
-            
+
+            // Deduplicate jobs based on job_title and company
+            $uniqueJobs = $enrichedLeads->unique(function ($job) {
+                return $job['job_title'] . '|' . $job['company'];
+            })->values();
+
             return response()->json([
-                'data' => $enrichedLeads->values(),
-                'total' => $enrichedLeads->count(),
+                'data' => $uniqueJobs,
+                'total' => $uniqueJobs->count(),
                 'matching_strategy' => $leads->first()?->skill_matches ? 'skills-based' : 'experience-based',
                 'user_id' => $user->id,
             ]);
@@ -42,12 +47,17 @@ class LeadController extends Controller
                     ->orderBy('created_at', 'desc')
                     ->limit($limit)
                     ->get();
-                    
+
         $enrichedLeads = $this->enrichLeadsWithStructureData($leads);
 
+        // Deduplicate jobs based on job_title and company
+        $uniqueJobs = $enrichedLeads->unique(function ($job) {
+            return $job['job_title'] . '|' . $job['company'];
+        })->values();
+
         return response()->json([
-            'data' => $enrichedLeads,
-            'total' => $enrichedLeads->count(),
+            'data' => $uniqueJobs,
+            'total' => $uniqueJobs->count(),
         ]);
     }
 
@@ -69,13 +79,18 @@ class LeadController extends Controller
             $relevantJobs = $this->jobMatchingService->findRelevantJobs($user->id, $limit);
             $enrichedJobs = $this->enrichLeadsWithStructureData($relevantJobs);
 
+            // Deduplicate jobs based on job_title and company
+            $uniqueJobs = $enrichedJobs->unique(function ($job) {
+                return $job['job_title'] . '|' . $job['company'];
+            })->values();
+
             return response()->json([
-                'data' => $enrichedJobs->values(),
-                'total' => $enrichedJobs->count(),
+                'data' => $uniqueJobs,
+                'total' => $uniqueJobs->count(),
                 'matching_strategy' => $relevantJobs->first()?->skill_matches ? 'skills-based' : 'experience-based',
-                'message' => $relevantJobs->isEmpty() 
-                    ? 'No relevant jobs found. Try updating your resume or work experience.' 
-                    : "Found {$relevantJobs->count()} relevant job matches.",
+                'message' => $relevantJobs->isEmpty()
+                    ? 'No relevant jobs found. Try updating your resume or work experience.'
+                    : "Found {$uniqueJobs->count()} relevant job matches.",
             ]);
         } catch (\Exception $e) {
             \Log::error('Error in relevant jobs endpoint', [
@@ -90,12 +105,17 @@ class LeadController extends Controller
                         ->orderBy('created_at', 'desc')
                         ->limit($limit)
                         ->get();
-                        
+
             $enrichedLeads = $this->enrichLeadsWithStructureData($leads);
 
+            // Deduplicate jobs based on job_title and company
+            $uniqueJobs = $enrichedLeads->unique(function ($job) {
+                return $job['job_title'] . '|' . $job['company'];
+            })->values();
+
             return response()->json([
-                'data' => $enrichedLeads,
-                'total' => $enrichedLeads->count(),
+                'data' => $uniqueJobs,
+                'total' => $uniqueJobs->count(),
                 'matching_strategy' => 'fallback',
                 'message' => 'Showing all available jobs (relevance matching temporarily unavailable)',
             ]);

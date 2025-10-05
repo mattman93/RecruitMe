@@ -41,8 +41,8 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
   };
 
   return (
-    <Card className="p-6">
-      <div className="space-y-4">
+    <Card className="p-6 w-full">
+      <div className="space-y-4 w-full">
         {/* File Header */}
         <div className="border-b border-border pb-4">
           <h3 className="font-semibold file-preview-text mb-2">File Preview</h3>
@@ -54,8 +54,8 @@ export function FilePreview({ file, preview, fileUrl, fileName, fileType, fileSi
                 <FileText className="h-6 w-6 text-primary" />
               )}
             </div>
-            <div>
-              <p className="font-medium file-preview-text truncate max-w-xs">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium file-preview-text truncate">
                 {displayName}
               </p>
               <div className="flex items-center gap-2 text-sm file-preview-text">

@@ -312,7 +312,7 @@ export default function App() {
       <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-2xl">
+          <div className="w-full">
             <div className="text-center mb-8">
               <button 
                 onClick={() => setAppState('guest')}

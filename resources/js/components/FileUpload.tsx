@@ -362,8 +362,8 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
                 w-full max-w-2xl h-80 border-2 border-dashed rounded-xl
                 flex flex-col items-center justify-center gap-6
                 transition-all duration-300 cursor-pointer bg-card file-upload-glow
-                ${isDragOver 
-                  ? 'border-primary bg-primary/5 scale-[1.02]' 
+                ${isDragOver
+                  ? 'border-primary bg-primary/5 scale-[1.02]'
                   : 'border-border hover:border-primary/50 hover:bg-primary/5'
                 }
               `}
@@ -398,7 +398,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
           {/* Login Option - Only show for authenticated users as a logout option */}
           {!isAuthenticated && (
             <div className="flex justify-center">
-              <div className="w-full max-w-2xl">
+              <div className="w-full">
                 <div className="text-center">
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">

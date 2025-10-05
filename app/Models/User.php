@@ -69,6 +69,11 @@ class User extends Authenticatable
         return $this->hasMany(ParsedResume::class)->orderBy('parsed_at', 'desc');
     }
 
+    public function oauthTokens()
+    {
+        return $this->hasMany(UserOAuthToken::class);
+    }
+
     /**
      * Check if user has uploaded a resume
      */

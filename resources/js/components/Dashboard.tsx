@@ -39,11 +39,13 @@ export function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [sendAsUser, setSendAsUser] = useState(true);
   const [userEmail, setUserEmail] = useState('');
+  const [hasGmailOAuth, setHasGmailOAuth] = useState(false);
 
   useEffect(() => {
     fetchUploadedResume();
     fetchWorkExperience();
     fetchUserInfo();
+    fetchOAuthStatus();
   }, []);
   
 
@@ -109,6 +111,25 @@ const fetchUserInfo = async () => {
     }
   } catch (error) {
     console.error('Error fetching user info:', error);
+  }
+};
+
+const fetchOAuthStatus = async () => {
+  try {
+    const response = await fetch('/api/user/oauth-status', {
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setHasGmailOAuth(data.hasGmailOAuth || false);
+    }
+  } catch (error) {
+    console.error('Error fetching OAuth status:', error);
   }
 };
 
@@ -189,9 +210,9 @@ const fetchUserInfo = async () => {
               Your resume is ready. Let's find you the perfect job opportunities.
             </p>
 
-            {/* Email Toggle */}
-            {userEmail && (
-              <div className="flex items-center justify-center space-x-3 p-4 py-10 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200 max-w-md mx-auto" 
+            {/* Email Toggle - Only show if user has Gmail OAuth integrated */}
+            {userEmail && hasGmailOAuth && (
+              <div className="flex items-center justify-center space-x-3 p-4 py-10 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200 max-w-md mx-auto"
                     style={{ marginBottom: '3%', padding: '3%'}}>
                 <Mail className="h-4 w-4 text-gray-600" />
                 <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700" style={{padding: '2%'}}>
