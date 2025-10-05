@@ -311,7 +311,7 @@ const fetchOAuthStatus = async () => {
 
             {/* Right Column - Job Queue */}
             <div className="flex-1 fade-in fade-in-delay-2 visible">
-              <JobQueue />
+              <JobQueue userEmail={userEmail} hasGmailOAuth={hasGmailOAuth} />
             </div>
           </div>
         </div>

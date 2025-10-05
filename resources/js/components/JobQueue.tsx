@@ -1,9 +1,16 @@
 import { useState, useEffect } from "react";
-import { MapPin, DollarSign, Clock, Building2, Loader2, Zap } from "lucide-react";
+import { MapPin, DollarSign, Clock, Building2, Loader2, Zap, Mail } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
+import { Switch } from "./ui/switch";
+import { Label } from "./ui/label";
 import { JobApplicationModal } from "./JobApplicationModal";
+
+interface JobQueueProps {
+  userEmail?: string;
+  hasGmailOAuth?: boolean;
+}
 
 interface Lead {
   id: number;
@@ -32,12 +39,13 @@ interface Lead {
 }
 
 
-export function JobQueue() {
+export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRelevantJobs, setIsRelevantJobs] = useState(false);
-  
+  const [sendAsUser, setSendAsUser] = useState(true);
+
   // Application processing state
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -328,8 +336,7 @@ export function JobQueue() {
     if (activeLeads.length === 0) {
       return {
         text: "Load More Matches",
-        icon: <Zap className="mr-3 h-6 w-6" />,
-        className: "w-full h-14 bg-purple-600 hover:bg-purple-700 text-white text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+        icon: <Zap className="mr-2 h-4 w-4" />
       };
     }
 
@@ -340,23 +347,20 @@ export function JobQueue() {
     if (!isProcessing && applied === 0) {
       return {
         text: `Start Applying to ${activeLeads.length} Jobs`,
-        icon: <Zap className="mr-3 h-6 w-6" />,
-        className: "w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+        icon: <Zap className="mr-2 h-4 w-4" />
       };
     }
 
     if (isProcessing) {
       return {
-        text: `Apply to Next Opportunity [${applied + 1}/${totalOriginal}]`,
-        icon: <Loader2 className="mr-3 h-6 w-6 animate-spin" />,
-        className: "w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+        text: `Apply to Next [${applied + 1}/${totalOriginal}]`,
+        icon: <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       };
     }
 
     return {
-      text: `Apply to Next Opportunity [${applied}/${totalOriginal}]`,
-      icon: <Zap className="mr-3 h-6 w-6" />,
-      className: "w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+      text: `Apply to Next [${applied}/${totalOriginal}]`,
+      icon: <Zap className="mr-2 h-4 w-4" />
     };
   };
 
@@ -379,13 +383,36 @@ export function JobQueue() {
         </Badge>
       </div>
 
-      {/* Start Applying Button - Moved to Top */}
-      <div className="space-y-3">
+      {/* FlowRank Badge, Email Toggle, and Apply Button */}
+      <div className="flex items-center gap-4" style={{ justifyContent: 'end' }}>
+        {/* FlowRank Badge */}
+        <div className="flowrank-badge">
+          <div className="flex items-center gap-2">
+            <div className="flowrank-dot"></div>
+            <span className="flowrank-text">FlowRank</span>
+          </div>
+          <span className="text-muted-foreground text-sm">:</span>
+          <span className="flowrank-number">125</span>
+        </div>
+
+        {userEmail && hasGmailOAuth && (
+          <div className="flex items-center gap-3 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200">
+            <Mail className="h-4 w-4 text-gray-600" />
+            <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700 cursor-pointer">
+              Applying from {userEmail}
+            </Label>
+            <Switch
+              id="send-as-user"
+              checked={sendAsUser}
+              onCheckedChange={setSendAsUser}
+            />
+          </div>
+        )}
         <Button
           onClick={handleApplicationMethod}
           disabled={isProcessing}
-          className={buttonContent.className}
-          size="lg"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+          size="default"
         >
           {buttonContent.icon}
           {buttonContent.text}
