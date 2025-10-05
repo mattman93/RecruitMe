@@ -175,24 +175,28 @@ const fetchOAuthStatus = async () => {
   if (isLoading) {
     return (
       <div className="flex-1 p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <Card className="p-6 animate-pulse">
-              <div className="space-y-4">
-                <div className="h-6 bg-muted rounded w-1/2"></div>
-                <div className="h-32 bg-muted rounded"></div>
-              </div>
-            </Card>
-            <Card className="p-6 animate-pulse">
-              <div className="space-y-4">
-                <div className="h-6 bg-muted rounded w-1/2"></div>
-                <div className="space-y-3">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-24 bg-muted rounded"></div>
-                  ))}
+        <div className="w-full">
+          <div className="flex gap-6">
+            <div className="flex-shrink-0" style={{ width: '35%' }}>
+              <Card className="p-6 animate-pulse">
+                <div className="space-y-4">
+                  <div className="h-6 bg-muted rounded w-1/2"></div>
+                  <div className="h-32 bg-muted rounded"></div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
+            <div className="flex-1">
+              <Card className="p-6 animate-pulse">
+                <div className="space-y-4">
+                  <div className="h-6 bg-muted rounded w-1/2"></div>
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="h-24 bg-muted rounded"></div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
@@ -202,7 +206,7 @@ const fetchOAuthStatus = async () => {
   return (
     <div ref={ref} className="flex flex-col min-h-screen">
       <div className="flex-1 p-8">
-        <div className="max-w-6xl mx-auto space-y-8">
+        <div className="w-full space-y-8">
           {/* Tabs */}
           <div className="flex items-center gap-8 border-b border-border">
             <button
@@ -247,16 +251,16 @@ const fetchOAuthStatus = async () => {
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in fade-in-delay-1 visible">
+          <div className="flex gap-6 fade-in fade-in-delay-1 visible">
             {/* Left Column - Resume Preview */}
-            <div className="space-y-6">
+            <div className="sticky top-8 self-start space-y-6 flex-shrink-0" style={{ width: '35%' }}>
               <div className="flex items-center justify-between">
               </div>
 
               {uploadedResume ? (
                 <Card className="p-6">
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-semibold text-[#1A1A1A]">Resume</h2>
+                    <h2 className="text-xl font-semibold text-[#1A1A1A]">Resume</h2>
                     {/* File Info */}
                     <div className="flex items-center gap-4">
                       <div className="flex-shrink-0 p-3 bg-primary/10 rounded-lg">
@@ -306,7 +310,7 @@ const fetchOAuthStatus = async () => {
             </div>
 
             {/* Right Column - Job Queue */}
-            <div className="fade-in fade-in-delay-2 visible">
+            <div className="flex-1 fade-in fade-in-delay-2 visible">
               <JobQueue />
             </div>
           </div>
