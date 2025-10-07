@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { FileText, Download, Edit3, CheckCircle2, Mail, Edit2 } from "lucide-react";
+import { FileText, Download, Edit3, CheckCircle2, Mail, Edit2, Briefcase, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
+import { ApplicationCard } from "./ApplicationCard";
 import { JobQueue } from "./JobQueue";
 import { Footer } from "./Footer";
 import WorkExperience from "./WorkExperience";
@@ -31,6 +32,23 @@ interface WorkExperienceItem {
   is_current: boolean;
 }
 
+type ApplicationStatus = "Applied" | "No Response" | "Delivery Error";
+
+interface ApplicationItem {
+  title: string;
+  company: string;
+  salaryRange?: string;
+  location?: string;
+  appliedDate: string;
+  status: ApplicationStatus;
+  description?: string;
+  applicationDetails?: {
+    platform?: string;
+    applicationId?: string;
+    coverLetter?: boolean;
+  };
+}
+
 export function Dashboard() {
   const { ref, isVisible } = useScrollAnimation(0.2);
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
@@ -40,12 +58,15 @@ export function Dashboard() {
   const [userEmail, setUserEmail] = useState('');
   const [hasGmailOAuth, setHasGmailOAuth] = useState(false);
   const [activeTab, setActiveTab] = useState<'matches' | 'applications' | 'settings'>('matches');
-
+  const [userApplications, setUserApplications] = useState<ApplicationItem[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   useEffect(() => {
     fetchUploadedResume();
     fetchWorkExperience();
     fetchUserInfo();
     fetchOAuthStatus();
+    fetchUserApplications();
   }, []);
   
 
@@ -178,6 +199,75 @@ const fetchOAuthStatus = async () => {
     alert('Starting to apply to all jobs! This feature is coming soon.');
   };
 
+  const fetchUserApplications = async () => {
+    try {
+      const response = await fetch('/api/applications', {
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Backend returns paginated data
+        if (data.data) {
+          // Map backend application data to frontend format
+          const mappedApplications = data.data.map((app: any) => ({
+            title: app.lead?.job_title || app.lead?.title || 'Unknown Position',
+            company: app.lead?.company || 'Unknown Company',
+            salaryRange: app.lead?.pay_range,
+            location: app.lead?.location,
+            appliedDate: new Date(app.created_at).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            }),
+            status: mapApplicationStatus(app.status),
+            description: app.lead?.description,
+            applicationDetails: {
+              platform: app.application_method === 'email_based' ? 'Email' : 'Direct Application',
+              applicationId: `APP-${app.id}`,
+              coverLetter: !!app.cover_letter
+            }
+          }));
+          setUserApplications(mappedApplications);
+        }
+      } else if (response.status === 401) {
+        console.log('User not authenticated');
+      }
+    } catch (error) {
+      console.error('Error fetching applications:', error);
+    }
+  };
+
+  const mapApplicationStatus = (status: string): ApplicationStatus => {
+    switch (status) {
+      case 'submitted':
+      case 'completed':
+        return 'Applied';
+      case 'failed':
+      case 'error':
+        return 'Delivery Error';
+      case 'pending':
+      case 'processing':
+      default:
+        return 'No Response';
+    }
+  };
+
+  // Pagination calculations
+  const totalPages = Math.ceil(userApplications.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentApplications = userApplications.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 p-8">
@@ -257,6 +347,8 @@ const fetchOAuthStatus = async () => {
           </div>
 
           {/* Main Content Grid */}
+          {/* Dashboard Content */}
+        {activeTab === 'matches' && (
           <div className="flex gap-6 fade-in fade-in-delay-1 visible">
             {/* Left Column - Resume Preview */}
             <div className="sticky top-8 self-start space-y-6 flex-shrink-0" style={{ width: '35%' }}>
@@ -319,6 +411,114 @@ const fetchOAuthStatus = async () => {
               <JobQueue userEmail={userEmail} hasGmailOAuth={hasGmailOAuth} />
             </div>
           </div>
+        )}
+        
+        {/* Your Applications Tab */}
+        {activeTab === 'applications' && (
+          <div className="space-y-4 pt-8">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-foreground">Your Applications</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Track the status of your job applications
+                </p>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {userApplications.length} total application{userApplications.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+
+            {/* Applications List */}
+            {userApplications.length > 0 ? (
+              <>
+                <div className="space-y-2">
+                  {currentApplications.map((application, index) => (
+                    <ApplicationCard
+                      key={startIndex + index}
+                      title={application.title}
+                      company={application.company}
+                      salaryRange={application.salaryRange}
+                      location={application.location}
+                      appliedDate={application.appliedDate}
+                      status={application.status}
+                      description={application.description}
+                      applicationDetails={application.applicationDetails}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 pt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronLeft size={16} />
+                    </Button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(page)}
+                          className="h-8 w-8 p-0"
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronRight size={16} />
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <Briefcase size={48} className="mx-auto text-muted-foreground mb-1" />
+                <h3 className="font-semibold text-foreground mb-2">No Applications Yet</h3>
+                <p className="text-muted-foreground">Once you start applying to jobs, they'll appear here.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="max-w-2xl">
+            <Card className="p-6">
+              <h3 className="font-semibold text-foreground mb-4">Account Settings</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground">Email Notifications</label>
+                  <p className="text-sm text-muted-foreground">Get notified about new job matches and application updates</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Job Preferences</label>
+                  <p className="text-sm text-muted-foreground">Update your desired salary range, location, and role preferences</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Privacy Settings</label>
+                  <p className="text-sm text-muted-foreground">Control who can see your profile and application history</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
         </div>
       </div>
       <Footer />

@@ -291,6 +291,14 @@ class JobApplicationService
         // Get user's resume file
         $resume = $user->uploadedFiles()->where('file_type', 'resume')->latest()->first();
 
+        Log::info("Preparing email content - Resume check", [
+            'user_id' => $user->id,
+            'resume_found' => !!$resume,
+            'resume_id' => $resume?->id,
+            'resume_path' => $resume?->file_path,
+            'resume_name' => $resume?->original_name
+        ]);
+
         // Generate subject line
         $subject = "Application for {$lead->title} - {$formData['personal']['full_name']}";
 
@@ -979,15 +987,40 @@ class JobApplicationService
         $message .= $body . "\r\n\r\n";
 
         // Add resume attachment if provided
-        if ($resumePath && file_exists(storage_path('app/' . $resumePath))) {
-            $fileContent = file_get_contents(storage_path('app/' . $resumePath));
-            $encodedContent = base64_encode($fileContent);
+        if ($resumePath) {
+            // Try direct path first, then check private/ subdirectory
+            $fullPath = storage_path('app/' . $resumePath);
+            if (!file_exists($fullPath)) {
+                $fullPath = storage_path('app/private/' . $resumePath);
+            }
 
-            $message .= "--{$boundary}\r\n";
-            $message .= "Content-Type: application/pdf; name=\"{$resumeName}\"\r\n";
-            $message .= "Content-Disposition: attachment; filename=\"{$resumeName}\"\r\n";
-            $message .= "Content-Transfer-Encoding: base64\r\n\r\n";
-            $message .= chunk_split($encodedContent, 76, "\r\n");
+            if (file_exists($fullPath)) {
+                $fileContent = file_get_contents($fullPath);
+                $encodedContent = base64_encode($fileContent);
+
+                $message .= "--{$boundary}\r\n";
+                $message .= "Content-Type: application/pdf; name=\"{$resumeName}\"\r\n";
+                $message .= "Content-Disposition: attachment; filename=\"{$resumeName}\"\r\n";
+                $message .= "Content-Transfer-Encoding: base64\r\n\r\n";
+                $message .= chunk_split($encodedContent, 76, "\r\n");
+
+                Log::info("Resume attached to Gmail message", [
+                    'resume_name' => $resumeName,
+                    'resume_path' => $resumePath,
+                    'full_path_used' => $fullPath,
+                    'file_size' => strlen($fileContent)
+                ]);
+            } else {
+                Log::warning("Resume not attached to Gmail message - file not found", [
+                    'resume_path_provided' => $resumePath,
+                    'tried_paths' => [
+                        storage_path('app/' . $resumePath),
+                        storage_path('app/private/' . $resumePath)
+                    ]
+                ]);
+            }
+        } else {
+            Log::warning("Resume not attached to Gmail message - no path provided");
         }
 
         $message .= "--{$boundary}--";
@@ -1038,25 +1071,41 @@ class JobApplicationService
         $email->addContent("text/plain", $emailContent['body']);
 
         // Attach resume if available
-        if (!empty($emailContent['resume_path']) && file_exists(storage_path('app/' . $emailContent['resume_path']))) {
-            $resumeContent = file_get_contents(storage_path('app/' . $emailContent['resume_path']));
-            $email->addAttachment(
-                base64_encode($resumeContent),
-                "application/pdf",
-                $emailContent['resume_name'],
-                "attachment"
-            );
+        if (!empty($emailContent['resume_path'])) {
+            // Try direct path first, then check private/ subdirectory
+            $fullPath = storage_path('app/' . $emailContent['resume_path']);
+            if (!file_exists($fullPath)) {
+                $fullPath = storage_path('app/private/' . $emailContent['resume_path']);
+            }
 
-            Log::info("Resume attachment added", [
-                'application_id' => $application->id,
-                'resume_name' => $emailContent['resume_name'],
-                'resume_size' => strlen($resumeContent)
-            ]);
+            if (file_exists($fullPath)) {
+                $resumeContent = file_get_contents($fullPath);
+                $email->addAttachment(
+                    base64_encode($resumeContent),
+                    "application/pdf",
+                    $emailContent['resume_name'],
+                    "attachment"
+                );
+
+                Log::info("Resume attachment added to SendGrid email", [
+                    'application_id' => $application->id,
+                    'resume_name' => $emailContent['resume_name'],
+                    'full_path_used' => $fullPath,
+                    'resume_size' => strlen($resumeContent)
+                ]);
+            } else {
+                Log::warning("Resume file not found for SendGrid", [
+                    'application_id' => $application->id,
+                    'resume_path' => $emailContent['resume_path'],
+                    'tried_paths' => [
+                        storage_path('app/' . $emailContent['resume_path']),
+                        storage_path('app/private/' . $emailContent['resume_path'])
+                    ]
+                ]);
+            }
         } else {
-            Log::warning("Resume file not found or path empty", [
-                'application_id' => $application->id,
-                'resume_path' => $emailContent['resume_path'] ?? 'null',
-                'expected_full_path' => !empty($emailContent['resume_path']) ? storage_path('app/' . $emailContent['resume_path']) : 'null'
+            Log::warning("Resume path empty for SendGrid", [
+                'application_id' => $application->id
             ]);
         }
 

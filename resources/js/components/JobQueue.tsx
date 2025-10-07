@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
-import { MapPin, DollarSign, Clock, Building2, Loader2, Zap, Mail } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { MapPin, DollarSign, Clock, Building2, Loader2, Zap, Mail, CheckCircle2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { JobApplicationModal } from "./JobApplicationModal";
+import { ViewJobDescription } from "./ViewJobDescription";
 
 interface JobQueueProps {
   userEmail?: string;
@@ -57,6 +59,11 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   // Animation state
   const [removingJobId, setRemovingJobId] = useState<number | null>(null);
   const [activeLeads, setActiveLeads] = useState<Lead[]>([]);
+  const [animationStage, setAnimationStage] = useState<'idle' | 'border-animating' | 'overlay-showing' | 'success-showing'>('idle');
+
+  // View job description modal state
+  const [viewJobModalOpen, setViewJobModalOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<Lead | null>(null);
 
   useEffect(() => {
     fetchLeads();
@@ -143,45 +150,30 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
     }
   };
 
-  const refreshJobQueue = async () => {
-    console.log('Refreshing job queue after successful applications...');
-    
-    // Show loading state
-    setIsLoading(true);
-    setError(null);
-    
-    // Fetch fresh leads directly from all leads endpoint (skip relevant)
-    try {
-      const response = await fetch('/api/leads?limit=50', {
-        credentials: 'include',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch leads');
-      }
-
-      const data = await response.json();
-      setLeads(data.data || []);
-      setIsRelevantJobs(false); // These are not relevant-matched jobs
-      
-    } catch (error) {
-      console.error('Error refreshing leads:', error);
-      setError('Failed to load new job opportunities');
-    } finally {
-      setIsLoading(false);
-    }
-    
-    console.log('Job queue refreshed with new leads');
+  const decodeHtmlEntities = (text: string): string => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/html');
+    return doc.documentElement.textContent || '';
   };
 
   const truncateDescription = (description: string, maxLength: number = 120) => {
-    if (description.length <= maxLength) return description;
-    return description.substring(0, maxLength) + '...';
+    // Decode HTML entities and strip HTML tags
+    const cleaned = decodeHtmlEntities(description).trim();
+
+    if (cleaned.length <= maxLength) return cleaned;
+    return cleaned.substring(0, maxLength) + '...';
   };
+
+  const motivationalMessage = useMemo(() => {
+    const messages = [
+      "Launching your next big career move...",
+      "Setting up your next dream job...",
+      "Crafting the perfect application...",
+      "Opening doors to new opportunities...",
+      "Preparing your professional breakthrough..."
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  }, [animationStage]);
 
   const getExperienceLevelBadgeStyle = (level: string) => {
     const normalizedLevel = level.toLowerCase();
@@ -202,6 +194,93 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
     return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#d1d5db' };
   };
 
+  const submitApplicationViaAPI = async (lead: Lead) => {
+    try {
+      // Get CSRF token
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
+
+      // Submit application via email API
+      const response = await fetch('/api/automation/process-email-application', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': token,
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          job_url: lead.source_url,
+        }),
+      });
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error submitting application:', error);
+      throw error;
+    }
+  };
+
+  const pollJobStatus = async (sessionKey: string) => {
+    console.log('[Polling] Starting to poll status for session:', sessionKey);
+    let pollCount = 0;
+    const maxPolls = 150; // 5 minutes at 2-second intervals
+
+    const pollInterval = setInterval(async () => {
+      pollCount++;
+      console.log('[Polling] Poll attempt', pollCount);
+
+      try {
+        const response = await fetch(`/api/automation/status/${sessionKey}`, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const status = await response.json();
+        console.log('[Polling] Status update:', status);
+
+        // Check if completed
+        if (status.status === 'submitted' || status.status === 'success' || status.status === 'completed') {
+          console.log('[Polling] Job completed successfully');
+          clearInterval(pollInterval);
+
+          // Show success overlay
+          setAnimationStage('success-showing');
+          setTimeout(() => {
+            handleAutoApplicationComplete();
+          }, 2000);
+        } else if (status.status === 'needs_user_input') {
+          console.log('[Polling] Needs user input, opening modal');
+          clearInterval(pollInterval);
+          setAnimationStage('idle');
+          setModalOpen(true);
+        } else if (status.status === 'error' || status.status === 'failed') {
+          console.log('[Polling] Job failed, opening modal');
+          clearInterval(pollInterval);
+          setAnimationStage('idle');
+          setModalOpen(true);
+        } else if (pollCount >= maxPolls) {
+          console.log('[Polling] Timeout - stopping poll');
+          clearInterval(pollInterval);
+          setAnimationStage('idle');
+          setModalOpen(true);
+        }
+        // Otherwise keep polling (status is still 'queued' or 'processing')
+      } catch (error) {
+        console.error('[Polling] Error:', error);
+        clearInterval(pollInterval);
+        setAnimationStage('idle');
+        setModalOpen(true);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
   const handleApplicationMethod = async () => {
     try {
       // If queue is empty, load more jobs
@@ -219,28 +298,118 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
       setIsProcessing(true);
       setCompletedApplications([]);
 
-      // Start with the first job
-      setModalOpen(true);
+      const currentLead = activeLeads[0];
+      console.log('[Animation] Starting application flow for:', currentLead.job_title);
+
+      // Start animation sequence
+      // Stage 1: Border animation
+      console.log('[Animation] Stage 1: border-animating');
+      setAnimationStage('border-animating');
+
+      // Stage 2: Show loading overlay after border animation
+      setTimeout(async () => {
+        console.log('[Animation] Stage 2: overlay-showing');
+        setAnimationStage('overlay-showing');
+
+        // Stage 3: Always try to auto-submit via API
+        // The API will tell us if it needs user input
+        console.log('[Animation] Calling API to process application');
+
+        try {
+          const result = await submitApplicationViaAPI(currentLead);
+          console.log('[Animation] API response:', result);
+
+          // Check for validation errors
+          if (result.errors || !result.status) {
+            console.error('[Animation] API validation error:', result);
+            setAnimationStage('idle');
+            setModalOpen(true);
+            return;
+          }
+
+          if (result.status === 'submitted' || result.status === 'success') {
+            // Show success overlay
+            console.log('[Animation] Application submitted successfully, showing success');
+            setAnimationStage('success-showing');
+
+            // After showing success, remove the card
+            setTimeout(() => {
+              handleAutoApplicationComplete();
+            }, 2000); // Show success for 2 seconds
+          } else if (result.status === 'processing') {
+            // Job is being processed asynchronously - start polling
+            console.log('[Animation] Job is processing, starting to poll status');
+            const sessionKey = (result as any).session_key;
+            if (sessionKey) {
+              pollJobStatus(sessionKey);
+            } else {
+              console.error('[Animation] No session_key in processing response');
+              setAnimationStage('idle');
+              setModalOpen(true);
+            }
+          } else if (result.status === 'needs_user_input') {
+            // Needs user input - open modal
+            console.log('[Animation] Needs user input, opening modal');
+            setAnimationStage('idle');
+            setModalOpen(true);
+          } else {
+            // Error or unknown status - open modal for manual intervention
+            console.log('[Animation] Unexpected status, opening modal:', result.status);
+            setAnimationStage('idle');
+            setModalOpen(true);
+          }
+        } catch (error) {
+          console.error('[Animation] Error during API call:', error);
+          // Open modal on error
+          setAnimationStage('idle');
+          setModalOpen(true);
+        }
+      }, 2000);
 
     } catch (error) {
       console.error('Error starting applications:', error);
       setIsProcessing(false);
+      setAnimationStage('idle');
       alert('Failed to start applications. Please try again.');
     }
+  };
+
+  const handleAutoApplicationComplete = () => {
+    const currentLead = activeLeads[0];
+    setCompletedApplications(prev => [...prev, currentLead.id]);
+
+    // Start exit animation
+    setRemovingJobId(currentLead.id);
+    setAnimationStage('idle');
+    setIsProcessing(false);
+
+    // After animation completes, remove from activeLeads
+    setTimeout(() => {
+      setActiveLeads(prev => prev.slice(1)); // Remove first job
+      setRemovingJobId(null);
+
+      // Check if all jobs are done
+      if (activeLeads.length <= 1) {
+        console.log(`Completed applications for ${completedApplications.length + 1} jobs`);
+      }
+    }, 500); // Match CSS animation duration
   };
 
   const handleApplicationComplete = () => {
     const currentLead = activeLeads[0]; // Always working with the first card now
     setCompletedApplications(prev => [...prev, currentLead.id]);
 
-    // Close modal and stop processing state immediately
+    // Close modal
     setModalOpen(false);
-    setIsProcessing(false);
 
-    // After 5 second delay (already shown in modal), trigger animation
+    // Show success overlay on card
+    setAnimationStage('success-showing');
+
+    // After showing success, start exit animation
     setTimeout(() => {
-      // Start exit animation
       setRemovingJobId(currentLead.id);
+      setAnimationStage('idle');
+      setIsProcessing(false);
 
       // After animation completes, remove from activeLeads
       setTimeout(() => {
@@ -251,14 +420,23 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
         if (activeLeads.length <= 1) {
           console.log(`Completed applications for ${completedApplications.length + 1} jobs`);
         }
-        // If there are more jobs, the button will be enabled and user can click it
       }, 500); // Match CSS animation duration
-    }, 100); // Small delay after modal closes
+    }, 2000); // Show success for 2 seconds
   };
 
   const handleModalClose = () => {
     setModalOpen(false);
     setIsProcessing(false);
+  };
+
+  const handleViewJob = (lead: Lead) => {
+    setSelectedJob(lead);
+    setViewJobModalOpen(true);
+  };
+
+  const handleCloseViewJob = () => {
+    setViewJobModalOpen(false);
+    setSelectedJob(null);
   };
 
   const handleSkipJob = () => {
@@ -426,16 +604,49 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
       {/* Job Cards */}
       <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-        {activeLeads.map((lead) => (
+        {activeLeads.map((lead, index) => {
+          const isFirstCard = index === 0;
+
+          // Base classes
+          let cardClasses = "p-6 hover:shadow-md transition-all duration-500 cursor-pointer relative overflow-hidden";
+
+          // Animation classes for card removal
+          if (removingJobId === lead.id) {
+            cardClasses += " animate-slide-out-up opacity-0 -translate-y-4";
+          } else {
+            cardClasses += " animate-slide-in-down";
+          }
+
+          // Add animate-pulse for border animation
+          if (isFirstCard && animationStage === 'border-animating') {
+            cardClasses += " animate-pulse";
+          }
+
+          // Inline style for border (bypasses Tailwind class conflicts)
+          const cardStyle = isFirstCard && animationStage === 'border-animating'
+            ? {
+                border: '2px solid #3b82f6',
+                borderColor: '#3b82f6',
+                borderWidth: '2px',
+                borderStyle: 'solid'
+              }
+            : undefined;
+
+          if (isFirstCard) {
+            console.log('[Card Render] animationStage =', animationStage, 'style =', cardStyle);
+          }
+
+          return (
           <Card
             key={lead.id}
-            className={`p-6 hover:shadow-md transition-all duration-500 cursor-pointer relative ${
-              removingJobId === lead.id
-                ? 'animate-slide-out-up opacity-0 -translate-y-4'
-                : 'animate-slide-in-down'
-            }`}
+            className={`${cardClasses} cursor-pointer hover:shadow-lg transition-shadow`}
+            style={{
+              ...cardStyle,
+              position: 'relative' // Ensure relative positioning for absolute overlays
+            }}
+            onClick={() => handleViewJob(lead)}
           >
-            <div className="space-y-4">
+            <div className="space-y-4" style={{ position: 'relative', zIndex: 1 }}>
               {/* Header */}
               <div className="space-y-2">
                 <div className="flex items-start justify-between">
@@ -478,12 +689,62 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
                 {truncateDescription(lead.description)}
               </p>
             </div>
+
+            {/* Overlay for loading animation stage */}
+            {isFirstCard && animationStage === 'overlay-showing' && (() => {
+              console.log('[Overlay Render] Rendering loading overlay with message:', motivationalMessage);
+              return (
+                <div
+                  className="absolute flex items-center justify-center rounded-lg"
+                  style={{
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 10,
+                    background: 'linear-gradient(to bottom right, rgba(59, 130, 246, 0.9), rgba(147, 51, 234, 0.9))',
+                    borderRadius: '0.5rem'
+                  }}
+                >
+                  <div className="text-center text-white p-6">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+                    <p className="font-medium mb-2">{motivationalMessage}</p>
+                    <div className="w-32 bg-white/30 rounded-full h-1.5 mx-auto">
+                      <div className="bg-white h-full rounded-full w-3/4"></div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Overlay for success animation stage */}
+            {isFirstCard && animationStage === 'success-showing' && (
+              <div
+                className="absolute flex items-center justify-center rounded-lg"
+                style={{
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 10,
+                  background: 'linear-gradient(to bottom right, rgba(59, 130, 246, 0.9), rgba(147, 51, 234, 0.9))',
+                  borderRadius: '0.5rem'
+                }}
+              >
+                <div className="text-center text-white p-6">
+                  <CheckCircle2 className="w-12 h-12 mx-auto mb-4" />
+                  <p className="font-semibold text-lg mb-1">Application Successfully Submitted!</p>
+                  <p className="text-sm opacity-90">Moving to your next opportunity...</p>
+                </div>
+              </div>
+            )}
           </Card>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Application Modal */}
-      {modalOpen && activeLeads[0] && (
+      {/* Application Modal - Rendered via Portal to bypass transform parent */}
+      {modalOpen && activeLeads[0] && createPortal(
         <JobApplicationModal
           isOpen={modalOpen}
           onClose={handleModalClose}
@@ -495,7 +756,24 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
           userFormData={userFormData}
           currentJobIndex={10 - activeLeads.length}
           totalJobs={10}
-        />
+          skipAutoStart={true}
+        />,
+        document.body
+      )}
+
+      {/* View Job Description Modal - Rendered via Portal */}
+      {viewJobModalOpen && selectedJob && createPortal(
+        <ViewJobDescription
+          isOpen={viewJobModalOpen}
+          onClose={handleCloseViewJob}
+          jobTitle={selectedJob.job_title}
+          company={selectedJob.company}
+          salary={selectedJob.pay_range}
+          location={selectedJob.location}
+          description={selectedJob.description}
+          jobUrl={selectedJob.source_url}
+        />,
+        document.body
       )}
     </div>
   );

@@ -30,6 +30,7 @@ interface JobApplicationModalProps {
   userFormData?: FormData;
   currentJobIndex?: number;
   totalJobs?: number;
+  skipAutoStart?: boolean; // If true, don't automatically call API when modal opens
 }
 
 type AutomationState = 'analyzing' | 'needs_input' | 'filling' | 'ready_to_submit' | 'submitting' | 'completed' | 'error';
@@ -57,17 +58,18 @@ interface AutomationResult {
   message?: string;
 }
 
-export function JobApplicationModal({ 
-  isOpen, 
-  onClose, 
-  jobTitle, 
-  company, 
-  applicationUrl, 
+export function JobApplicationModal({
+  isOpen,
+  onClose,
+  jobTitle,
+  company,
+  applicationUrl,
   onApplicationComplete,
   onSkipJob,
   userFormData,
   currentJobIndex,
-  totalJobs
+  totalJobs,
+  skipAutoStart = false
 }: JobApplicationModalProps) {
   const [automationState, setAutomationState] = useState<AutomationState>('analyzing');
   const [automationResult, setAutomationResult] = useState<AutomationResult | null>(null);
@@ -104,11 +106,13 @@ export function JobApplicationModal({
       setMissingFieldValues({});
       setShowSkipButton(false);
       setIsSubmittingMissingFields(false);
-      
-      // Start automation
-      startAutomation();
+
+      // Start automation only if not skipping auto-start
+      if (!skipAutoStart) {
+        startAutomation();
+      }
     }
-  }, [isOpen, applicationUrl]);
+  }, [isOpen, applicationUrl, skipAutoStart]);
 
   // Show skip button after 30 seconds if still analyzing or immediately if error
   useEffect(() => {
@@ -142,26 +146,8 @@ export function JobApplicationModal({
       }
     } else if (result.status === 'submitted') {
       // Email-based application completed successfully
-      setAutomationState('completed');
-
-      // Start countdown
-      setSecondsUntilNext(5);
-      const countdownInterval = setInterval(() => {
-        setSecondsUntilNext(prev => {
-          if (prev <= 1) {
-            clearInterval(countdownInterval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      // Wait 5 seconds to show success message, then advance to next job
-      setTimeout(() => {
-        clearInterval(countdownInterval);
-        onApplicationComplete();
-        // Don't close the modal - let the parent component handle advancing to next job
-      }, 5000);
+      // Immediately call onApplicationComplete to show success on job card
+      onApplicationComplete();
     } else if (result.status === 'error' || result.status === 'failed') {
       setAutomationState('error');
     } else {
@@ -305,27 +291,8 @@ export function JobApplicationModal({
       const result = await response.json();
 
       if (result.status === 'submitted') {
-        setAutomationResult(result);
-        setAutomationState('completed');
-
-        // Start countdown
-        setSecondsUntilNext(5);
-        const countdownInterval = setInterval(() => {
-          setSecondsUntilNext(prev => {
-            if (prev <= 1) {
-              clearInterval(countdownInterval);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-
-        // Wait 5 seconds to show success message, then advance to next job
-        setTimeout(() => {
-          clearInterval(countdownInterval);
-          onApplicationComplete();
-          // Don't close the modal - let the parent component handle advancing to next job
-        }, 5000);
+        // Immediately call onApplicationComplete to show success on job card
+        onApplicationComplete();
       } else {
         setAutomationResult(result);
         setAutomationState('error');
@@ -372,28 +339,10 @@ export function JobApplicationModal({
       
       const result = await response.json();
       setAutomationResult(result);
-      
+
       if (result.status === 'completed') {
-        setAutomationState('completed');
-
-        // Start countdown
-        setSecondsUntilNext(5);
-        const countdownInterval = setInterval(() => {
-          setSecondsUntilNext(prev => {
-            if (prev <= 1) {
-              clearInterval(countdownInterval);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-
-        // Wait 5 seconds to show success message, then advance to next job
-        setTimeout(() => {
-          clearInterval(countdownInterval);
-          onApplicationComplete();
-          // Don't close the modal - let the parent component handle advancing to next job
-        }, 5000);
+        // Immediately call onApplicationComplete to show success on job card
+        onApplicationComplete();
       } else if (result.status === 'requires_captcha') {
         setAutomationState('error');
         setAutomationResult({
