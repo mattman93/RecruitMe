@@ -24,6 +24,16 @@
 
         <title inertia>{{ config('app.name', 'AppliFlow') }}</title>
 
+        {{-- Google Analytics --}}
+        <!-- Google tag (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=YOUR_GA_MEASUREMENT_ID"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-8W4FM5PCPG');
+        </script>
+
         <link rel="icon" href="/favicon-bold-256.png" type="image/png" sizes="256x256">
         <link rel="icon" href="/favicon-bold-64.png" type="image/png" sizes="64x64">
         <link rel="icon" href="/favicon-bold-32.png" type="image/png" sizes="32x32">
