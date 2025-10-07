@@ -5,6 +5,11 @@ interface FooterProps {
 
 export function Footer({ onContactUs, isPrelaunch }: FooterProps) {
   const handleLinkClick = (e: React.MouseEvent, linkName: string) => {
+    // Privacy and Terms are always accessible, even in prelaunch
+    if (linkName === "Privacy" || linkName === "Terms") {
+      return; // Allow default navigation
+    }
+
     e.preventDefault();
     if (isPrelaunch && onContactUs) {
       onContactUs();
@@ -14,8 +19,8 @@ export function Footer({ onContactUs, isPrelaunch }: FooterProps) {
   const links = [
     { name: "About", href: "#" },
     { name: "Blog", href: "#" },
-    { name: "Privacy", href: "#" },
-    { name: "Terms", href: "#" },
+    { name: "Privacy", href: "/privacy" },
+    { name: "Terms", href: "/terms" },
     { name: "Contact", href: "#" }
   ];
 

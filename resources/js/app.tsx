@@ -16,8 +16,10 @@ import { SocialProof } from "./components/SocialProof";
 import { Enterprise } from "./components/Enterprise";
 import { ContactUs } from "./components/ContactUs";
 import { DataIngestionStats } from "./components/DataIngestionStats";
+import { PrivacyPolicy } from "./components/PrivacyPolicy";
+import { TermsOfService } from "./components/TermsOfService";
 
-type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated' | 'upload' | 'home' | 'enterprise' | 'contact-us' | 'admin-data-ingestion';
+type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated' | 'upload' | 'home' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
@@ -54,6 +56,10 @@ export default function App() {
           setAppState('enterprise');
         } else if (window.location.pathname === '/admin/data-ingestion') {
           setAppState('admin-data-ingestion');
+        } else if (window.location.pathname === '/privacy') {
+          setAppState('privacy');
+        } else if (window.location.pathname === '/terms') {
+          setAppState('terms');
         } else {
           setAppState('home');
         }
@@ -62,6 +68,10 @@ export default function App() {
         // Check if we're on the enterprise route
         if (window.location.pathname === '/enterprise') {
           setAppState('enterprise');
+        } else if (window.location.pathname === '/privacy') {
+          setAppState('privacy');
+        } else if (window.location.pathname === '/terms') {
+          setAppState('terms');
         } else {
           setAppState('guest');
         }
@@ -395,6 +405,28 @@ export default function App() {
       <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
         <DataIngestionStats />
+      </div>
+    );
+  }
+
+  // Privacy Policy state
+  if (appState === 'privacy') {
+    return (
+      <div className="min-h-screen bg-white">
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <PrivacyPolicy />
+        <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
+      </div>
+    );
+  }
+
+  // Terms of Service state
+  if (appState === 'terms') {
+    return (
+      <div className="min-h-screen bg-white">
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <TermsOfService />
+        <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
       </div>
     );
   }

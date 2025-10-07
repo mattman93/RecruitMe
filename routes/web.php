@@ -116,6 +116,15 @@ Route::get('/enterprise', function () {
     return Inertia::render('Welcome'); // Load the React SPA which will handle the enterprise state
 })->name('enterprise');
 
+// Privacy and Terms routes (public)
+Route::get('/privacy', function () {
+    return Inertia::render('Welcome'); // Load the React SPA which will handle the privacy state
+})->name('privacy');
+
+Route::get('/terms', function () {
+    return Inertia::render('Welcome'); // Load the React SPA which will handle the terms state
+})->name('terms');
+
 // Admin routes - Super Admin only
 Route::get('/admin/data-ingestion', function () {
     return Inertia::render('Welcome'); // Load the React SPA which will handle the admin state
