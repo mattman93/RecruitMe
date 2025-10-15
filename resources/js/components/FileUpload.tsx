@@ -18,6 +18,7 @@ interface FileUploadProps {
   onAuthRequired: () => void;
   onShowLogin: () => void;
   isAuthenticated?: boolean;
+  onUploadSuccess?: () => void;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -31,7 +32,7 @@ const ALLOWED_TYPES = {
   'image/webp': 'WebP'
 };
 
-export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = false }: FileUploadProps) {
+export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = false, onUploadSuccess }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -224,8 +225,13 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
       if (isAuthenticated) {
         // User is logged in, upload directly
         await uploadAuthenticatedFiles(completedFiles);
-        // Handle success - maybe redirect to dashboard or show success message
+        // Handle success - redirect to dashboard or call success callback
         console.log('Files uploaded successfully for authenticated user');
+        if (onUploadSuccess) {
+          onUploadSuccess();
+        } else {
+          window.location.href = '/dashboard';
+        }
       } else {
         // User is not logged in, upload to temporary storage first
         await uploadGuestFiles(completedFiles);
@@ -268,7 +274,7 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
       }
     } else {
       // If authenticated, proceed with normal upload
-      handleFinalUpload();
+      await handleFinalUpload();
     }
   };
 

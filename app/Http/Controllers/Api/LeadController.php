@@ -26,13 +26,14 @@ class LeadController extends Controller
 
         if ($matchRelevant && $user) {
             // Return AI-matched relevant jobs
-            $leads = $this->jobMatchingService->findRelevantJobs($user->id, $limit);
+            $fetchLimit = $limit * 2;
+            $leads = $this->jobMatchingService->findRelevantJobs($user->id, $fetchLimit);
             $enrichedLeads = $this->enrichLeadsWithStructureData($leads);
 
             // Deduplicate jobs based on job_title and company
             $uniqueJobs = $enrichedLeads->unique(function ($job) {
                 return $job['job_title'] . '|' . $job['company'];
-            })->values();
+            })->values()->take($limit);
 
             return response()->json([
                 'data' => $uniqueJobs,
@@ -43,9 +44,10 @@ class LeadController extends Controller
         }
 
         // Return all jobs (default behavior)
+        $fetchLimit = $limit * 2;
         $leads = Lead::where('is_active', true)
                     ->orderBy('created_at', 'desc')
-                    ->limit($limit)
+                    ->limit($fetchLimit)
                     ->get();
 
         $enrichedLeads = $this->enrichLeadsWithStructureData($leads);
@@ -53,7 +55,7 @@ class LeadController extends Controller
         // Deduplicate jobs based on job_title and company
         $uniqueJobs = $enrichedLeads->unique(function ($job) {
             return $job['job_title'] . '|' . $job['company'];
-        })->values();
+        })->values()->take($limit);
 
         return response()->json([
             'data' => $uniqueJobs,
@@ -75,18 +77,22 @@ class LeadController extends Controller
         }
 
         try {
-            $limit = $request->integer('limit', 50);
-            $relevantJobs = $this->jobMatchingService->findRelevantJobs($user->id, $limit);
+            $limit = $request->integer('limit', 10);
+
+            // Fetch more jobs than needed to account for deduplication
+            $fetchLimit = $limit * 2;
+            $relevantJobs = $this->jobMatchingService->findRelevantJobs($user->id, $fetchLimit);
             $enrichedJobs = $this->enrichLeadsWithStructureData($relevantJobs);
 
             // Deduplicate jobs based on job_title and company
             $uniqueJobs = $enrichedJobs->unique(function ($job) {
                 return $job['job_title'] . '|' . $job['company'];
-            })->values();
+            })->values()->take($limit);
 
             return response()->json([
                 'data' => $uniqueJobs,
                 'total' => $uniqueJobs->count(),
+                'total_potential_matches' => $relevantJobs->total_potential_matches ?? $uniqueJobs->count(),
                 'matching_strategy' => $relevantJobs->first()?->skill_matches ? 'skills-based' : 'experience-based',
                 'message' => $relevantJobs->isEmpty()
                     ? 'No relevant jobs found. Try updating your resume or work experience.'
@@ -101,9 +107,10 @@ class LeadController extends Controller
             ]);
 
             // Fallback to regular jobs if relevant matching fails
+            $fetchLimit = $limit * 2;
             $leads = Lead::where('is_active', true)
                         ->orderBy('created_at', 'desc')
-                        ->limit($limit)
+                        ->limit($fetchLimit)
                         ->get();
 
             $enrichedLeads = $this->enrichLeadsWithStructureData($leads);
@@ -111,7 +118,7 @@ class LeadController extends Controller
             // Deduplicate jobs based on job_title and company
             $uniqueJobs = $enrichedLeads->unique(function ($job) {
                 return $job['job_title'] . '|' . $job['company'];
-            })->values();
+            })->values()->take($limit);
 
             return response()->json([
                 'data' => $uniqueJobs,

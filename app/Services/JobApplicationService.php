@@ -159,14 +159,14 @@ class JobApplicationService
 
         try {
             $response = OpenAI::chat()->create([
-                'model' => 'gpt-4',
+                'model' => 'gpt-4o-mini', // Switched from gpt-4 for 95% cost savings
                 'messages' => [
                     [
                         'role' => 'user',
                         'content' => "Given a company '{$companyName}' with domain '{$domain}', find all possible recruiting or HR-related emails (including likely patterns). Output as JSON array with 'email' and 'type' fields. Include common patterns like hr@, careers@, recruiting@, jobs@, talent@, etc. Do not include generic emails like info@ or support@. IMPORTANT: Only use the domain '{$domain}' - do NOT use job board domains like workable.com, greenhouse.io, lever.co, etc."
                     ]
                 ],
-                'max_tokens' => 500,
+                'max_tokens' => 100, // Reduced from 500 - we only need simple email patterns
                 'temperature' => 0.1
             ]);
 
@@ -225,14 +225,14 @@ class JobApplicationService
 
         try {
             $response = OpenAI::chat()->create([
-                'model' => 'gpt-4',
+                'model' => 'gpt-4o-mini', // Switched from gpt-4 for 95% cost savings
                 'messages' => [
                     [
                         'role' => 'user',
                         'content' => "Given a company name '{$companyName}', what is their likely primary domain/website? Return ONLY the domain (e.g., 'company.com') without http/https. If you're not confident, return null. Output as JSON with 'domain' field."
                     ]
                 ],
-                'max_tokens' => 100,
+                'max_tokens' => 50, // Reduced from 100 - we only need a domain name
                 'temperature' => 0.1
             ]);
 
@@ -1511,7 +1511,7 @@ class JobApplicationService
             ]);
 
             $response = OpenAI::chat()->create([
-                'model' => 'gpt-4',
+                'model' => 'gpt-4o-mini', // Switched from gpt-4 for 95% cost savings
                 'messages' => [
                     [
                         'role' => 'user',

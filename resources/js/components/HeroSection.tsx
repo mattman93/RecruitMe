@@ -9,12 +9,17 @@ interface HeroSectionProps {
 
 export function HeroSection({ onSeeMatches, onDashboard, isAuthenticated }: HeroSectionProps) {
   const offsetY = useParallax();
-  
+
   return (
     <section className="w-full hero-gradient relative overflow-hidden">
-      <div 
-        className="parallax-bg absolute inset-0 hero-gradient"
-        style={{ transform: `translateY(${offsetY * 0.5}px)` }}
+      <div
+        className="parallax-bg absolute inset-0"
+        style={{
+          transform: `translateY(${offsetY * -0.3}px)`,
+          height: 'calc(100% + 200px)',
+          top: '-100px',
+          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 25%, #a855f7 50%, #c084fc 75%, #2563eb 100%)'
+        }}
       />
       <div className="max-w-4xl mx-auto px-6 pt-32 lg:pt-40 pb-40 lg:pb-48 text-center relative z-10">
         <div className="mb-8">

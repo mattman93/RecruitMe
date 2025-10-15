@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { MapPin, DollarSign, Clock, Building2, Loader2, Zap, Mail, CheckCircle2 } from "lucide-react";
+import { MapPin, DollarSign, Clock, Building2, Loader2, Zap, Mail, CheckCircle2, FileText } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -47,6 +47,10 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   const [error, setError] = useState<string | null>(null);
   const [isRelevantJobs, setIsRelevantJobs] = useState(false);
   const [sendAsUser, setSendAsUser] = useState(true);
+  const [totalPotentialMatches, setTotalPotentialMatches] = useState<number>(0);
+  const [flowRank, setFlowRank] = useState<number>(0);
+  const [hasResume, setHasResume] = useState<boolean>(false);
+  const [hasActiveFilters, setHasActiveFilters] = useState<boolean>(false);
 
   // Application processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,14 +70,37 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   const [selectedJob, setSelectedJob] = useState<Lead | null>(null);
 
   useEffect(() => {
+    checkResumeStatus();
     fetchLeads();
     fetchUserFormData();
+    fetchFlowRank();
+    fetchUserSettings();
   }, []);
 
   // Update activeLeads when leads change
   useEffect(() => {
     setActiveLeads(leads.slice(0, 10));
   }, [leads]);
+
+  const checkResumeStatus = async () => {
+    try {
+      const response = await fetch('/api/user/resume', {
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setHasResume(!!data.resume);
+      }
+    } catch (error) {
+      console.error('Error checking resume status:', error);
+      setHasResume(false);
+    }
+  };
 
   const fetchLeads = async () => {
     try {
@@ -107,14 +134,16 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
       const result = await response.json();
       const leadsData = result.data || [];
-      
+
       console.log(`Loaded ${leadsData.length} job leads`, {
         total: result.total,
+        total_potential_matches: result.total_potential_matches,
         strategy: result.matching_strategy,
         message: result.message
       });
 
       setLeads(leadsData);
+      setTotalPotentialMatches(result.total_potential_matches || leadsData.length);
       setIsRelevantJobs(!!result.matching_strategy && result.matching_strategy !== 'fallback');
       
       if (leadsData.length === 0) {
@@ -147,6 +176,55 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
       }
     } catch (error) {
       console.error('Error fetching user form data:', error);
+    }
+  };
+
+  const fetchFlowRank = async () => {
+    try {
+      const response = await fetch('/api/user/flow-rank', {
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFlowRank(data.flow_rank || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching FlowRank:', error);
+    }
+  };
+
+  const fetchUserSettings = async () => {
+    try {
+      const response = await fetch('/api/user/settings', {
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Check if any filters are explicitly set
+        const hasFilters = !!(
+          data?.min_salary ||
+          data?.max_salary ||
+          data?.preferred_location ||
+          data?.preferred_job_title ||
+          (data?.employment_types && Object.values(data.employment_types).some((v: any) => v === true)) ||
+          (data?.work_arrangement && Object.values(data.work_arrangement).some((v: any) => v === true))
+        );
+
+        setHasActiveFilters(hasFilters);
+      }
+    } catch (error) {
+      console.error('Error fetching user settings:', error);
     }
   };
 
@@ -378,6 +456,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
     const currentLead = activeLeads[0];
     setCompletedApplications(prev => [...prev, currentLead.id]);
 
+    // Refresh FlowRank after application
+    fetchFlowRank();
+
     // Start exit animation
     setRemovingJobId(currentLead.id);
     setAnimationStage('idle');
@@ -398,6 +479,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   const handleApplicationComplete = () => {
     const currentLead = activeLeads[0]; // Always working with the first card now
     setCompletedApplications(prev => [...prev, currentLead.id]);
+
+    // Refresh FlowRank after application
+    fetchFlowRank();
 
     // Close modal
     setModalOpen(false);
@@ -518,9 +602,8 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
       };
     }
 
-    const totalOriginal = 10;
-    const remaining = activeLeads.length;
-    const applied = totalOriginal - remaining;
+    const applied = completedApplications.length;
+    const totalJobs = Math.min(leads.length, 10);
 
     if (!isProcessing && applied === 0) {
       return {
@@ -531,13 +614,13 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
     if (isProcessing) {
       return {
-        text: `Apply to Next [${applied + 1}/${totalOriginal}]`,
+        text: `Apply to Next [${applied + 1}/${totalJobs}]`,
         icon: <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       };
     }
 
     return {
-      text: `Apply to Next [${applied}/${totalOriginal}]`,
+      text: `Apply to Next [${applied}/${totalJobs}]`,
       icon: <Zap className="mr-2 h-4 w-4" />
     };
   };
@@ -557,53 +640,76 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
           )}
         </div>
         <Badge variant="secondary" className="px-3 py-1">
-          {activeLeads.length} of {leads.length} jobs
+          {activeLeads.length} of {totalPotentialMatches > leads.length ? `${totalPotentialMatches}+` : totalPotentialMatches} jobs
         </Badge>
       </div>
 
+      {/* No Resume Warning */}
+      {!hasResume && (
+        <Card className="p-8 text-center bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-dashed border-primary/30">
+          <FileText className="h-16 w-16 text-primary mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-foreground mb-2">Upload Your Resume to Begin</h3>
+          <p className="text-muted-foreground mb-4">
+            Upload your resume to start seeing personalized job matches tailored to your experience and skills.
+          </p>
+        </Card>
+      )}
+
       {/* FlowRank Badge (left), Email Toggle (center), Apply Button (right) */}
-      <div className="flex items-center gap-4">
-        {/* FlowRank Badge */}
-        <div className="flowrank-badge">
-          <div className="flex items-center gap-2">
-            <div className="flowrank-dot"></div>
-            <span className="flowrank-text">FlowRank</span>
-          </div>
-          <span className="text-muted-foreground text-sm">:</span>
-          <span className="flowrank-number">125</span>
-        </div>
-
-        {/* Center spacer */}
-        <div className="flex-1 flex justify-center">
-          {userEmail && hasGmailOAuth && (
-            <div className="flex items-center gap-3 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200">
-              <Mail className="h-4 w-4 text-gray-600" />
-              <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700 cursor-pointer">
-                Applying from {userEmail}
-              </Label>
-              <Switch
-                id="send-as-user"
-                checked={sendAsUser}
-                onCheckedChange={setSendAsUser}
-              />
+      {hasResume && (
+        <>
+          <div className="flex items-center gap-4">
+            {/* FlowRank Badge */}
+            <div className="flowrank-badge">
+              <div className="flex items-center gap-2">
+                <div className="flowrank-dot"></div>
+                <span className="flowrank-text">FlowRank</span>
+              </div>
+              <span className="text-muted-foreground text-sm">:</span>
+              <span className="flowrank-number">{flowRank}</span>
             </div>
-          )}
-        </div>
 
-        {/* Apply Button */}
-        <Button
-          onClick={handleApplicationMethod}
-          disabled={isProcessing}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
-          size="default"
-        >
-          {buttonContent.icon}
-          {buttonContent.text}
-        </Button>
-      </div>
+            {/* Filtered with Preferences Badge */}
+            {hasActiveFilters && (
+              <div className="filtered-badge">
+                <div className="flex items-center gap-2">
+                  <div className="filtered-dot"></div>
+                  <span className="filtered-text">Filtered with Preferences</span>
+                </div>
+              </div>
+            )}
 
-      {/* Job Cards */}
-      <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+            {/* Center spacer */}
+            <div className="flex-1 flex justify-center">
+              {userEmail && hasGmailOAuth && (
+                <div className="flex items-center gap-3 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200">
+                  <Mail className="h-4 w-4 text-gray-600" />
+                  <Label htmlFor="send-as-user" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Applying from {userEmail}
+                  </Label>
+                  <Switch
+                    id="send-as-user"
+                    checked={sendAsUser}
+                    onCheckedChange={setSendAsUser}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Apply Button */}
+            <Button
+              onClick={handleApplicationMethod}
+              disabled={isProcessing}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+              size="default"
+            >
+              {buttonContent.icon}
+              {buttonContent.text}
+            </Button>
+          </div>
+
+          {/* Job Cards */}
+          <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
         {activeLeads.map((lead, index) => {
           const isFirstCard = index === 0;
 
@@ -742,6 +848,8 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
           );
         })}
       </div>
+      </>
+      )}
 
       {/* Application Modal - Rendered via Portal to bypass transform parent */}
       {modalOpen && activeLeads[0] && createPortal(

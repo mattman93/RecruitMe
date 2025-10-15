@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Link } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -308,19 +308,21 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
                 />
                 <span className="register-text">
                   I agree to the{" "}
-                  <button
-                    type="button"
-                    className="text-white hover:text-white/80 transition-colors underline"
-                  >
-                    Terms of Service
-                  </button>
+                  <a
+                    className="transition-colors underline"
+                    style={{"color": "blue"}}
+                    href={"/terms"}
+                   >
+                  Terms of Service
+                </a>
                   {" "}and{" "}
-                  <button
-                    type="button"
-                    className="text-white hover:text-white/80 transition-colors underline"
-                  >
-                    Privacy Policy
-                  </button>
+                <a
+                  className="transition-colors underline"
+                  style={{"color": "blue"}}
+                  href={"/privacy"}
+                >
+                Privacy Policy
+              </a>
                 </span>
               </div>
 

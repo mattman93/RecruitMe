@@ -20,6 +20,7 @@ return new class extends Migration
             $table->text('refresh_token')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->json('scopes')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
 
             $table->unique(['user_id', 'provider']);

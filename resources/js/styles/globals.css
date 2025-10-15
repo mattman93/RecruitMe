@@ -433,6 +433,38 @@ body {
   transform: scale(1.05);
 }
 
+/* Filtered with Preferences Badge Styles */
+.filtered-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(to right, rgb(254 249 195), rgb(253 230 138));
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  width: fit-content;
+  transition: all 0.2s ease-in-out;
+}
+
+.filtered-badge:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+.filtered-text {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: rgb(113 63 18);
+}
+
+.filtered-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: rgb(217 119 6);
+  border-radius: 9999px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
@@ -440,4 +472,35 @@ body {
   50% {
     opacity: 0.5;
   }
+}
+
+.dashboard-bg {
+  background-color: #f0f4f726
+}
+
+/* Google Places Autocomplete Styling */
+#placesElem {
+  margin-bottom: 0.5rem;
+}
+
+gmp-place-autocomplete {
+  width: 100%;
+  display: block;
+
+  /* Material Design 3 color tokens */
+  --md-sys-color-surface: var(--white);
+  --md-sys-color-on-surface: var(--primary-text);
+  --md-sys-color-on-surface-variant: var(--secondary-text);
+  --md-sys-color-primary: var(--primary-blue);
+  --md-sys-color-outline: var(--light-border);
+  --md-sys-color-outline-variant: var(--light-border);
+
+  /* Typography */
+  --md-sys-typescale-body-large-font: 'Inter', sans-serif;
+  --md-sys-typescale-body-medium-font: 'Inter', sans-serif;
+  --md-sys-typescale-body-small-font: 'Inter', sans-serif;
+
+  /* Border radius */
+  --md-sys-shape-corner-medium: 0.5rem;
+  --md-sys-shape-corner-small: 0.5rem;
 }

@@ -8,11 +8,17 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Main job runs hourly
-Schedule::command('hiring-cafe:fetch-jobs')
+// Main job runs hourly - TEMPORARILY DISABLED DUE TO 403 IP BAN COOLDOWN
+// Schedule::command('hiring-cafe:fetch-jobs')
+//     ->hourly()
+//     ->withoutOverlapping(30)
+//     ->appendOutputTo(storage_path('logs/hiring_cafe_jobs.log'));
+
+// Discover new job matches and notify users - runs hourly
+Schedule::job(new \App\Jobs\DiscoverNewMatches)
     ->hourly()
     ->withoutOverlapping(30)
-    ->appendOutputTo(storage_path('logs/hiring_cafe_jobs.log'));
+    ->appendOutputTo(storage_path('logs/discover_new_matches.log'));
 
 // Scheduler heartbeat - runs every minute to track scheduler health
 Schedule::call(function () {

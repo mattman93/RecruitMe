@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\UploadedFile;
 use App\Services\JobApplicationService;
+use App\Services\FlowRankService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -178,6 +179,22 @@ class UserController extends Controller
 
         return response()->json([
             'hasGmailOAuth' => $hasGmailOAuth
+        ]);
+    }
+
+    public function getFlowRank(Request $request)
+    {
+        $user = Auth::user();
+        $flowRankService = new FlowRankService();
+
+        $includeBreakdown = $request->boolean('breakdown', false);
+
+        if ($includeBreakdown) {
+            return response()->json($flowRankService->getFlowRankBreakdown($user));
+        }
+
+        return response()->json([
+            'flow_rank' => $flowRankService->calculateFlowRank($user)
         ]);
     }
 }

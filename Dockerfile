@@ -4,8 +4,12 @@ FROM php:8.2-fpm
 # Set working directory
 WORKDIR /var/www/html
 
-# Install system dependencies and Playwright requirements
-RUN apt-get update && apt-get install -y \
+# Install system dependencies in separate steps to avoid conflicts
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get update
+
+# Install basic dependencies first
+RUN apt-get install -y \
     git \
     curl \
     libpng-dev \
@@ -15,23 +19,10 @@ RUN apt-get update && apt-get install -y \
     unzip \
     nginx \
     supervisor \
-    libnss3 \
-    libnspr4 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libxss1 \
-    libasound2 \
-    libatspi2.0-0 \
-    libgtk-3-0 \
-    libgdk-pixbuf2.0-0 \
-    libxfixes3 \
-    libx11-xcb1 \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+    poppler-utils
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -39,6 +30,8 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Install Node.js (for Vite/asset compilation if needed later)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
+
+# Playwright dependencies removed for simplified build
 
 # Copy existing application directory contents
 COPY . /var/www/html
@@ -57,8 +50,8 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Install Node.js dependencies and Playwright browsers
-RUN npm install && npm run postinstall
+# Install Node.js dependencies (Playwright browsers removed)
+RUN npm install
 
 # Generate Laravel key (will be overridden by env)
 RUN php artisan key:generate --no-interaction

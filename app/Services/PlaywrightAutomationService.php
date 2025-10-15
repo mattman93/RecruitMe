@@ -2921,78 +2921,21 @@ JAVASCRIPT;
             return $this->getSimpleFormAnalysis($forms);
         }
         
-        $prompt = $this->buildFormAnalysisPrompt($forms);
-        
-        try {
-            Log::info('Sending form analysis to OpenAI (no optimization available)', [
-                'forms_count' => count($forms),
-                'prompt_length' => strlen($prompt),
-                'platform' => $platformDetected
-            ]);
-            
-            $response = OpenAI::chat()->create([
-                'model' => 'gpt-4',
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => 'You are an expert at analyzing job application forms. Analyze the provided form elements and return semantic field mappings in valid JSON format. Always return valid JSON.'
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => $prompt
-                    ]
-                ],
-                'temperature' => 0.1, // Low temperature for consistent analysis
-                'max_tokens' => 2000,
-                // Remove response_format for compatibility
-            ]);
-            
-            $content = $response->choices[0]->message->content;
-            
-            // Try to parse JSON directly first
-            $analysis = json_decode($content, true);
-            
-            // If that fails, try to extract JSON from markdown code blocks
-            if (!$analysis && preg_match('/```json\s*(.*?)\s*```/s', $content, $matches)) {
-                $jsonContent = $matches[1];
-                $analysis = json_decode($jsonContent, true);
-            }
-            
-            // If still no luck, try to extract any JSON object from the response
-            if (!$analysis && preg_match('/\{.*\}/s', $content, $matches)) {
-                $analysis = json_decode($matches[0], true);
-            }
-            
-            if (!$analysis) {
-                Log::warning('Failed to parse OpenAI response as JSON', [
-                    'response' => substr($content, 0, 500),
-                    'json_error' => json_last_error_msg()
-                ]);
-                throw new Exception('Failed to parse OpenAI response as JSON: ' . json_last_error_msg());
-            }
-            
-            Log::info('OpenAI form analysis completed', [
-                'platform_name' => $analysis['platform_name'] ?? 'Unknown',
-                'fields_mapped' => count($analysis['field_mappings'] ?? [])
-            ]);
-            
-            return $analysis;
-            
-        } catch (Exception $e) {
-            Log::error('OpenAI form analysis failed', [
-                'error' => $e->getMessage(),
-                'forms_count' => count($forms)
-            ]);
-            
-            // Return fallback analysis
-            return [
-                'platform_name' => 'Unknown',
-                'field_mappings' => $this->getFallbackFieldMappings($forms),
-                'validation_rules' => [],
-                'submission_flow' => ['single_page'],
-                'analysis_error' => $e->getMessage()
-            ];
-        }
+        // REMOVED: OpenAI form analysis call
+        // Automated form filling is no longer used, so we skip the expensive LLM analysis
+        Log::info('Skipping OpenAI form analysis (automated form filling disabled)', [
+            'forms_count' => count($forms),
+            'platform' => $platformDetected
+        ]);
+
+        // Return fallback analysis structure without calling OpenAI
+        return [
+            'platform_name' => 'Unknown',
+            'field_mappings' => $this->getFallbackFieldMappings($forms),
+            'validation_rules' => [],
+            'submission_flow' => ['single_page'],
+            'analysis_disabled' => true
+        ];
     }
     
     /**
