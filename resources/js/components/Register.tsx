@@ -126,7 +126,6 @@ export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
 
   const handleGithubRegister = () => {
     // Handle GitHub OAuth registration
-    console.log("GitHub registration clicked");
   };
 
   return (

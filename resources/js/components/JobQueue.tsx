@@ -118,7 +118,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
       if (!response.ok) {
         // Fallback to all leads if relevant endpoint fails
-        console.log('Relevant jobs failed, falling back to all leads');
         response = await fetch('/api/leads', {
           credentials: 'include',
           headers: {
@@ -134,13 +133,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
       const result = await response.json();
       const leadsData = result.data || [];
-
-      console.log(`Loaded ${leadsData.length} job leads`, {
-        total: result.total,
-        total_potential_matches: result.total_potential_matches,
-        strategy: result.matching_strategy,
-        message: result.message
-      });
 
       setLeads(leadsData);
       setTotalPotentialMatches(result.total_potential_matches || leadsData.length);
@@ -303,15 +295,13 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   };
 
   const pollJobStatus = async (sessionKey: string) => {
-    console.log('[Polling] Starting to poll status for session:', sessionKey);
     let pollCount = 0;
     const maxPolls = 150; // 5 minutes at 2-second intervals
 
     const pollInterval = setInterval(async () => {
       pollCount++;
-      console.log('[Polling] Poll attempt', pollCount);
 
-      try {
+      try{
         const response = await fetch(`/api/automation/status/${sessionKey}`, {
           credentials: 'include',
         });
@@ -321,11 +311,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
         }
 
         const status = await response.json();
-        console.log('[Polling] Status update:', status);
 
         // Check if completed
         if (status.status === 'submitted' || status.status === 'success' || status.status === 'completed') {
-          console.log('[Polling] Job completed successfully');
           clearInterval(pollInterval);
 
           // Show success overlay
@@ -334,17 +322,14 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
             handleAutoApplicationComplete();
           }, 2000);
         } else if (status.status === 'needs_user_input') {
-          console.log('[Polling] Needs user input, opening modal');
           clearInterval(pollInterval);
           setAnimationStage('idle');
           setModalOpen(true);
         } else if (status.status === 'error' || status.status === 'failed') {
-          console.log('[Polling] Job failed, opening modal');
           clearInterval(pollInterval);
           setAnimationStage('idle');
           setModalOpen(true);
         } else if (pollCount >= maxPolls) {
-          console.log('[Polling] Timeout - stopping poll');
           clearInterval(pollInterval);
           setAnimationStage('idle');
           setModalOpen(true);
@@ -377,25 +362,19 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
       setCompletedApplications([]);
 
       const currentLead = activeLeads[0];
-      console.log('[Animation] Starting application flow for:', currentLead.job_title);
 
       // Start animation sequence
       // Stage 1: Border animation
-      console.log('[Animation] Stage 1: border-animating');
       setAnimationStage('border-animating');
 
       // Stage 2: Show loading overlay after border animation
       setTimeout(async () => {
-        console.log('[Animation] Stage 2: overlay-showing');
         setAnimationStage('overlay-showing');
 
         // Stage 3: Always try to auto-submit via API
         // The API will tell us if it needs user input
-        console.log('[Animation] Calling API to process application');
-
         try {
           const result = await submitApplicationViaAPI(currentLead);
-          console.log('[Animation] API response:', result);
 
           // Check for validation errors
           if (result.errors || !result.status) {
@@ -407,7 +386,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
           if (result.status === 'submitted' || result.status === 'success') {
             // Show success overlay
-            console.log('[Animation] Application submitted successfully, showing success');
             setAnimationStage('success-showing');
 
             // After showing success, remove the card
@@ -416,7 +394,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
             }, 2000); // Show success for 2 seconds
           } else if (result.status === 'processing') {
             // Job is being processed asynchronously - start polling
-            console.log('[Animation] Job is processing, starting to poll status');
             const sessionKey = (result as any).session_key;
             if (sessionKey) {
               pollJobStatus(sessionKey);
@@ -427,12 +404,10 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
             }
           } else if (result.status === 'needs_user_input') {
             // Needs user input - open modal
-            console.log('[Animation] Needs user input, opening modal');
             setAnimationStage('idle');
             setModalOpen(true);
           } else {
             // Error or unknown status - open modal for manual intervention
-            console.log('[Animation] Unexpected status, opening modal:', result.status);
             setAnimationStage('idle');
             setModalOpen(true);
           }
@@ -471,7 +446,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
       // Check if all jobs are done
       if (activeLeads.length <= 1) {
-        console.log(`Completed applications for ${completedApplications.length + 1} jobs`);
+        // All jobs completed
       }
     }, 500); // Match CSS animation duration
   };
@@ -502,7 +477,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
         // Check if all jobs are done
         if (activeLeads.length <= 1) {
-          console.log(`Completed applications for ${completedApplications.length + 1} jobs`);
+          // All jobs completed
         }
       }, 500); // Match CSS animation duration
     }, 2000); // Show success for 2 seconds
@@ -525,7 +500,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
   const handleSkipJob = () => {
     const currentLead = activeLeads[0];
-    console.log(`Skipping job: ${currentLead.job_title} at ${currentLead.company}`);
 
     // Close modal and stop processing state immediately
     setModalOpen(false);
@@ -541,7 +515,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
         // Check if all jobs are done
         if (activeLeads.length <= 1) {
-          console.log(`Skipped final job. Completed applications for ${completedApplications.length} jobs`);
+          // All jobs skipped/completed
         }
         // If there are more jobs, the button will be enabled and user can click it
       }, 500);
@@ -738,9 +712,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
               }
             : undefined;
 
-          if (isFirstCard) {
-            console.log('[Card Render] animationStage =', animationStage, 'style =', cardStyle);
-          }
 
           return (
           <Card
@@ -797,9 +768,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
             </div>
 
             {/* Overlay for loading animation stage */}
-            {isFirstCard && animationStage === 'overlay-showing' && (() => {
-              console.log('[Overlay Render] Rendering loading overlay with message:', motivationalMessage);
-              return (
+            {isFirstCard && animationStage === 'overlay-showing' && (
                 <div
                   className="absolute flex items-center justify-center rounded-lg"
                   style={{
@@ -820,8 +789,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
                     </div>
                   </div>
                 </div>
-              );
-            })()}
+            )}
 
             {/* Overlay for success animation stage */}
             {isFirstCard && animationStage === 'success-showing' && (

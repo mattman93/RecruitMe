@@ -108,9 +108,9 @@ export default function App() {
           'X-CSRF-TOKEN': token,
         },
       });
-      
+
       if (response.ok) {
-        console.log('Guest uploads claimed successfully');
+        // Guest uploads claimed successfully
       }
     } catch (error) {
       console.error('Failed to claim guest uploads:', error);
@@ -137,9 +137,9 @@ export default function App() {
           'X-CSRF-TOKEN': token,
         },
       });
-      
+
       if (response.ok) {
-        console.log('Guest uploads claimed successfully');
+        // Guest uploads claimed successfully
       }
     } catch (error) {
       console.error('Failed to claim guest uploads:', error);
@@ -168,11 +168,6 @@ export default function App() {
 
       if (response.ok) {
         const data = await response.json();
-
-        // Log if user had Google OAuth
-        if (data.had_google_oauth) {
-          console.log('User with Google OAuth logged out');
-        }
 
         setIsUserAuthenticated(false);
         setAppState('guest');
@@ -241,10 +236,6 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
 
-        // Log if user had Google OAuth
-        if (data.had_google_oauth) {
-          console.log('User with Google OAuth logged out');
-        }
       }
     } catch (error) {
       console.error('Logout error:', error);

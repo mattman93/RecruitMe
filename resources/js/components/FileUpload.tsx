@@ -226,7 +226,6 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
         // User is logged in, upload directly
         await uploadAuthenticatedFiles(completedFiles);
         // Handle success - redirect to dashboard or call success callback
-        console.log('Files uploaded successfully for authenticated user');
         if (onUploadSuccess) {
           onUploadSuccess();
         } else {

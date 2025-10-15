@@ -111,7 +111,6 @@ export function Dashboard() {
 
           const placeField = document.getElementById("placesElem");
           if (!placeField) {
-            console.log('placesElem not found');
             return;
           }
 
@@ -125,7 +124,6 @@ export function Dashboard() {
           //@ts-ignore
           const placeAutocomplete = new google.maps.places.PlaceAutocompleteElement();
 
-          console.log('Appending autocomplete element:', placeAutocomplete);
           placeField.appendChild(placeAutocomplete);
 
           // Add the gmp-placeselect listener
@@ -159,10 +157,8 @@ const fetchUploadedResume = async () => {
       if (data.resume) {
         setUploadedResume(data.resume);
       }
-      console.log('authenticated');
     } else if (response.status === 401) {
       // User is not authenticated, handle accordingly
-      console.log('User not authenticated');
     }
   } catch (error) {
     console.error('Error fetching resume:', error);
@@ -268,7 +264,6 @@ const fetchOAuthStatus = async () => {
   };
 
   const handleStartApplying = () => {
-    console.log('Starting application process...');
     // This will trigger the bulk application process
     alert('Starting to apply to all jobs! This feature is coming soon.');
   };
@@ -309,7 +304,7 @@ const fetchOAuthStatus = async () => {
           setUserApplications(mappedApplications);
         }
       } else if (response.status === 401) {
-        console.log('User not authenticated');
+        // User not authenticated
       }
     } catch (error) {
       console.error('Error fetching applications:', error);

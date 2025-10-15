@@ -31,7 +31,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       credentials: 'include',
     });
     const { token } = await tokenResponse.json();
-console.log(token);
     const response = await fetch('/api/login', {
       method: 'POST',
       credentials: 'include',
@@ -66,7 +65,6 @@ console.log(token);
 
   const handleGithubLogin = () => {
     // Handle GitHub OAuth login
-    console.log("GitHub login clicked");
   };
 
   return (

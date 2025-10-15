@@ -170,7 +170,7 @@ export function JobApplicationModal({
         
         // Update status message if available
         if (status.message) {
-          console.log('Status:', status.message);
+          // Status message available
         }
         
         // Check if completed
