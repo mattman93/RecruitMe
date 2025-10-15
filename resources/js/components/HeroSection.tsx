@@ -1,5 +1,6 @@
 import { Button } from "./ui/button";
 import { useParallax } from "./hooks/useScrollAnimation";
+import { LavaLampBackground } from "./LavaLampBackground";
 
 interface HeroSectionProps {
   onSeeMatches?: () => void;
@@ -11,15 +12,13 @@ export function HeroSection({ onSeeMatches, onDashboard, isAuthenticated }: Hero
   const offsetY = useParallax();
 
   return (
-    <section className="w-full hero-gradient relative overflow-hidden">
-      <div
-        className="parallax-bg absolute inset-0"
-        style={{
-          transform: `translateY(${offsetY * -0.3}px)`,
-          height: 'calc(100% + 200px)',
-          top: '-100px',
-          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 25%, #a855f7 50%, #c084fc 75%, #2563eb 100%)'
-        }}
+    <section className="w-full min-h-screen relative overflow-hidden">
+      {/* Animated Lava Lamp Background */}
+      <LavaLampBackground />
+    {/* <section className="w-full hero-gradient relative overflow-hidden"> */}
+      {/* Gradient Overlay for smooth transition */}
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white pointer-events-none z-20" 
+           style={{ background: "linear-gradient(to bottom, transparent 0%, transparent 85%, white 100%)" }} 
       />
       <div className="max-w-4xl mx-auto px-6 pt-32 lg:pt-40 pb-40 lg:pb-48 text-center relative z-10">
         <div className="mb-8">
