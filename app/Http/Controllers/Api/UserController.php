@@ -197,4 +197,13 @@ class UserController extends Controller
             'flow_rank' => $flowRankService->calculateFlowRank($user)
         ]);
     }
+
+    public function hasResume(Request $request)
+    {
+        $user = Auth::user();
+
+        return response()->json([
+            'has_resume' => $user->hasResume()
+        ]);
+    }
 }

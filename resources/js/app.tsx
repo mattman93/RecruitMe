@@ -19,12 +19,13 @@ import { DataIngestionStats } from "./components/DataIngestionStats";
 import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { TermsOfService } from "./components/TermsOfService";
 
-type AppState = 'loading' | 'guest' | 'login' | 'auth-required' | 'register' | 'authenticated' | 'upload' | 'home' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms';
+type AppState = 'loading' | 'guest' | 'login' | 'register' | 'authenticated' | 'upload' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
   const [isUserAuthenticated, setIsUserAuthenticated] = useState<boolean>(false);
   const [isPrelaunch, setIsPrelaunch] = useState<boolean>(false);
+  const [hasBetaAccess, setHasBetaAccess] = useState<boolean>(false);
 
   // Check authentication status only on initial app load
   useEffect(() => {
@@ -33,6 +34,21 @@ export default function App() {
     }
   }, []);
 
+
+  const checkBetaAccess = async () => {
+    try {
+      const response = await fetch('/api/beta/check', {
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+      const data = await response.json();
+      setHasBetaAccess(data.activated || false);
+    } catch (error) {
+      setHasBetaAccess(false);
+    }
+  };
 
   const checkAuthStatus = async () => {
     try {
@@ -46,6 +62,9 @@ export default function App() {
 
       // Set prelaunch mode
       setIsPrelaunch(data.prelaunch || false);
+
+      // Check beta access status
+      await checkBetaAccess();
 
       if (data.authenticated) {
         setIsUserAuthenticated(true);
@@ -61,7 +80,7 @@ export default function App() {
         } else if (window.location.pathname === '/terms') {
           setAppState('terms');
         } else {
-          setAppState('home');
+          setAppState('guest');
         }
       } else {
         setIsUserAuthenticated(false);
@@ -84,69 +103,48 @@ export default function App() {
   };
 
   const handleSwitchToRegister = () => {
-    setAppState('register');
+    // Prevent registration during prelaunch
+    if (isPrelaunch) {
+      setAppState('contact-us');
+    } else {
+      setAppState('register');
+    }
   };
 
   const handleSwitchToLogin = () => {
-    setAppState('auth-required');
+    setAppState('login');
   };
 
   const handleRegister = async () => {
-    // After successful registration, check for any pending guest uploads
-    try {
-      // Get CSRF token from API
-      const tokenResponse = await fetch('/api/csrf-token', {
-        credentials: 'include',
-      });
-      const { token } = await tokenResponse.json();
-
-      const response = await fetch('/api/user/claim-guest-uploads', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': token,
-        },
-      });
-
-      if (response.ok) {
-        // Guest uploads claimed successfully
-      }
-    } catch (error) {
-      console.error('Failed to claim guest uploads:', error);
-    }
-    
     setIsUserAuthenticated(true);
-    setAppState('authenticated');
+    setAppState('upload');
   };
 
   const handleLogin = async () => {
-    // After successful login, check for any pending guest uploads
-    try {
-      // Get CSRF token from API
-      const tokenResponse = await fetch('/api/csrf-token', {
-        credentials: 'include',
-      });
-      const { token } = await tokenResponse.json();
+    setIsUserAuthenticated(true);
 
-      const response = await fetch('/api/user/claim-guest-uploads', {
-        method: 'POST',
+    // Check if user has a resume
+    try {
+      const response = await fetch('/api/user/has-resume', {
         credentials: 'include',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': token,
         },
       });
+      const data = await response.json();
 
-      if (response.ok) {
-        // Guest uploads claimed successfully
+      if (data.has_resume) {
+        // User has resume, go to dashboard
+        window.location.href = '/dashboard';
+      } else {
+        // User needs to upload resume first
+        setAppState('upload');
       }
     } catch (error) {
-      console.error('Failed to claim guest uploads:', error);
+      console.error('Failed to check resume status:', error);
+      // Default to upload page on error
+      setAppState('upload');
     }
-    
-    setIsUserAuthenticated(true);
-    setAppState('authenticated');
   };
 
   const handleLogout = async () => {
@@ -167,8 +165,7 @@ export default function App() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-
+        await response.json();
         setIsUserAuthenticated(false);
         setAppState('guest');
       } else {
@@ -183,15 +180,11 @@ export default function App() {
     }
   };
 
-  const handleAuthRequired = () => {
-    setAppState('auth-required');
-  };
-
   const handleSeeMatches = () => {
-    if (isPrelaunch) {
+    if (isPrelaunch && !hasBetaAccess) {
       setAppState('contact-us');
     } else {
-      setAppState('upload');
+      setAppState('login');
     }
   };
 
@@ -208,39 +201,11 @@ export default function App() {
   };
 
   const handleShowLogin = () => {
-    if (isPrelaunch) {
+    if (isPrelaunch && !hasBetaAccess) {
       setAppState('contact-us');
     } else {
       setAppState('login');
     }
-  };
-
-  const handleForceLogout = async () => {
-    // Force logout first, then show login
-    try {
-      // Get CSRF token from API
-      const tokenResponse = await fetch('/api/csrf-token', {
-        credentials: 'include',
-      });
-      const { token } = await tokenResponse.json();
-
-      const response = await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': token,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-    setAppState('login');
   };
 
   // Loading state
@@ -263,22 +228,49 @@ export default function App() {
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-md space-y-6">
             <div className="text-center">
-              <button 
+              <button
                 onClick={() => setAppState('guest')}
                 className="text-sm text-white back-to-upload-btn hover:text-primary transition-colors mb-4"
               >
-                ← Back to upload
+                ← Back to home
               </button>
             </div>
-            <Login onLogin={handleLogin} onSwitchToRegister={handleSwitchToRegister} />
+            <Login onLogin={handleLogin} onSwitchToRegister={handleSwitchToRegister} isPrelaunch={isPrelaunch} />
           </div>
         </div>
       </div>
     );
   }
 
-  // Register state
+  // Register state (not available during prelaunch)
   if (appState === 'register') {
+    // Redirect to contact-us during prelaunch
+    if (isPrelaunch) {
+      return (
+        <ContactUs
+          onClose={() => setAppState('guest')}
+          onBetaAccessSuccess={async () => {
+            await checkBetaAccess();
+            try {
+              const response = await fetch('/api/user/has-resume', {
+                credentials: 'include',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+              });
+              const data = await response.json();
+              if (data.has_resume) {
+                window.location.href = '/dashboard';
+              } else {
+                setAppState('upload');
+              }
+            } catch (error) {
+              console.error('Failed to check resume status:', error);
+              setAppState('upload');
+            }
+          }}
+        />
+      );
+    }
+
     return (
       <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
@@ -287,41 +279,14 @@ export default function App() {
     );
   }
 
-  // Login required state (after file upload)
-  if (appState === 'auth-required') {
-    return (
-      <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="text-center space-y-4 mb-8">
-            <h2 className="text-2xl font-semibold text-white">
-              Almost There!
-            </h2>
-            <p className="text-white/90 max-w-md">
-              Your resume has been uploaded successfully. Please sign in to start finding jobs and applying to positions.
-            </p>
-          </div>
-        </div>
-        <Login onLogin={handleLogin} onSwitchToRegister={handleSwitchToRegister} />
-      </div>
-    );
-  }
-
-  // Upload state (file upload page)
+  // Upload state (file upload page - shown after registration)
   if (appState === 'upload') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full">
             <div className="text-center mb-8">
-              <button 
-                onClick={() => setAppState('guest')}
-                className="text-sm back-to-upload-btn hover:text-primary transition-colors mb-4"
-                style={{ color: '#4b38f1' }}
-              >
-                ← Back to home
-              </button>
               <h2 className="text-2xl font-semibold mb-4" style={{ color: '#1A1A1A' }}>
                 Upload Your Resume
               </h2>
@@ -329,10 +294,9 @@ export default function App() {
                 Get personalized job matches based on your skills and experience
               </p>
             </div>
-            <FileUpload 
-              onAuthRequired={handleAuthRequired} 
-              onShowLogin={handleShowLogin}
-              isAuthenticated={false}
+            <FileUpload
+              onUploadSuccess={() => window.location.href = '/dashboard'}
+              isAuthenticated={isUserAuthenticated}
             />
           </div>
         </div>
@@ -340,33 +304,18 @@ export default function App() {
     );
   }
 
-  // Home state (uses global authentication state)
-  if (appState === 'home') {
-    return (
-      <div className="min-h-screen bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} />
-        <HeroSection onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
-        <ValuePreview />
-        <CoreBenefits />
-        <HowItWorks />
-        <SocialProof />
-        <ClosingCTA onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
-        <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
-      </div>
-    );
-  }
-
   // Guest state (not authenticated)
+  // Landing page (guest or authenticated)
   if (appState === 'guest') {
       return (
         <div className="min-h-screen bg-white">
-          <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
-          <HeroSection onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={false} />
+          <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+          <HeroSection onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
           <ValuePreview />
           <CoreBenefits />
           <HowItWorks />
           <SocialProof />
-          <ClosingCTA onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={false} />
+          <ClosingCTA onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
           <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
         </div>
       );
@@ -386,7 +335,36 @@ export default function App() {
   // Contact Us state (prelaunch mode)
   if (appState === 'contact-us') {
     return (
-      <ContactUs onClose={() => setAppState('guest')} />
+      <ContactUs
+        onClose={() => setAppState('guest')}
+        onBetaAccessSuccess={async () => {
+          // Refresh beta access status
+          await checkBetaAccess();
+
+          // Check if user has a resume (they're now logged in)
+          try {
+            const response = await fetch('/api/user/has-resume', {
+              credentials: 'include',
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+            const data = await response.json();
+
+            if (data.has_resume) {
+              // User has resume, redirect to dashboard
+              window.location.href = '/dashboard';
+            } else {
+              // User needs to upload resume first
+              setAppState('upload');
+            }
+          } catch (error) {
+            console.error('Failed to check resume status:', error);
+            // Default to upload page on error
+            setAppState('upload');
+          }
+        }}
+      />
     );
   }
 

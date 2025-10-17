@@ -28,6 +28,10 @@ Route::post('/form-preferences', [FormPreferenceController::class, 'store']);
 // Mailing list endpoint
 Route::post('/mailing-list/subscribe', [\App\Http\Controllers\MailListController::class, 'subscribe']);
 
+// Beta access token validation
+Route::post('/beta/activate', [\App\Http\Controllers\BetaAccessController::class, 'activate']);
+Route::get('/beta/check', [\App\Http\Controllers\BetaAccessController::class, 'check']);
+
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/resume', [\App\Http\Controllers\Api\UserController::class, 'getResume']);
@@ -37,6 +41,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/application-form-data', [\App\Http\Controllers\Api\UserController::class, 'getApplicationFormData']);
     Route::get('/user/oauth-status', [\App\Http\Controllers\Api\UserController::class, 'getOAuthStatus']);
     Route::get('/user/flow-rank', [\App\Http\Controllers\Api\UserController::class, 'getFlowRank']);
+    Route::get('/user/has-resume', [\App\Http\Controllers\Api\UserController::class, 'hasResume']);
 
     // User Settings
     Route::get('/user/settings', [\App\Http\Controllers\Api\UserSettingsController::class, 'index']);

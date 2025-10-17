@@ -26,7 +26,7 @@ Schedule::call(function () {
     \Illuminate\Support\Facades\Log::info('Scheduler heartbeat: ' . now()->format('Y-m-d H:i:s'));
 })->everyMinute();
 
-// Health monitoring - runs every 15 minutes
-Schedule::command('scheduler:monitor')
-    ->everyFifteenMinutes()
-    ->withoutOverlapping(5);
+// Health monitoring - runs every 15 minutes - DISABLED
+// Schedule::command('scheduler:monitor')
+//     ->everyFifteenMinutes()
+//     ->withoutOverlapping(5);

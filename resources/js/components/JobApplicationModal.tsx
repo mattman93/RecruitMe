@@ -161,31 +161,34 @@ export function JobApplicationModal({
         const response = await fetch(`/api/automation/status/${sessionKey}`, {
           credentials: 'include',
         });
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const status = await response.json();
-        
+
+        // Handle array response (backend returns array with single object)
+        const statusData = Array.isArray(status) ? status[0] : status;
+
         // Update status message if available
-        if (status.message) {
+        if (statusData.message) {
           // Status message available
         }
-        
+
         // Check if completed
-        if (status.status !== 'queued' && status.status !== 'processing') {
+        if (statusData.status !== 'queued' && statusData.status !== 'processing') {
           clearInterval(pollInterval);
-          handleAutomationResult(status);
+          handleAutomationResult(statusData);
         }
-        
+
       } catch (error) {
         console.error('Status polling failed:', error);
         clearInterval(pollInterval);
         setAutomationState('error');
-        setAutomationResult({ 
+        setAutomationResult({
           status: 'error',
-          error: 'Failed to check automation status' 
+          error: 'Failed to check automation status'
         });
       }
     }, 2000); // Poll every 2 seconds

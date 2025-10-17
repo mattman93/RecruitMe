@@ -15,8 +15,6 @@ interface UploadedFile {
 }
 
 interface FileUploadProps {
-  onAuthRequired: () => void;
-  onShowLogin: () => void;
   isAuthenticated?: boolean;
   onUploadSuccess?: () => void;
 }
@@ -32,7 +30,7 @@ const ALLOWED_TYPES = {
   'image/webp': 'WebP'
 };
 
-export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = false, onUploadSuccess }: FileUploadProps) {
+export function FileUpload({ isAuthenticated = false, onUploadSuccess }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -118,59 +116,6 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
     }
   };
 
-  // Auth check function
-  const checkAuthentication = async (): Promise<boolean> => {
-    try {
-      const response = await fetch('/api/auth/check', {
-        credentials: 'include',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      });
-      const data = await response.json();
-      return data.authenticated || false;
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      return false;
-    }
-  };
-
-  // Upload to temporary storage for guest users
-  const uploadGuestFiles = async (files: UploadedFile[]) => {
-    const formData = new FormData();
-    
-    files.forEach(uploadedFile => {
-      formData.append('files[]', uploadedFile.file);
-    });
-
-    try {
-      // Get CSRF token
-      const tokenResponse = await fetch('/api/csrf-token', {
-        credentials: 'include',
-      });
-      const { token } = await tokenResponse.json();
-
-      const response = await fetch('/api/guest/resume-upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': token,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Guest upload failed:', error);
-      throw error;
-    }
-  };
-
   // Upload for authenticated users
   const uploadAuthenticatedFiles = async (files: UploadedFile[]) => {
     const formData = new FormData();
@@ -209,35 +154,26 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
 
   const handleFinalUpload = async () => {
     setIsProcessing(true);
-    
+
     try {
       const completedFiles = uploadedFiles.filter(f => f.status === 'completed');
-      
+
       if (completedFiles.length === 0) {
         setErrors(['No files ready for upload']);
         setIsProcessing(false);
         return;
       }
 
-      // Check if user is authenticated
-      const isAuthenticated = await checkAuthentication();
-      
-      if (isAuthenticated) {
-        // User is logged in, upload directly
-        await uploadAuthenticatedFiles(completedFiles);
-        // Handle success - redirect to dashboard or call success callback
-        if (onUploadSuccess) {
-          onUploadSuccess();
-        } else {
-          window.location.href = '/dashboard';
-        }
+      // User is authenticated, upload directly
+      await uploadAuthenticatedFiles(completedFiles);
+
+      // Handle success - redirect to dashboard or call success callback
+      if (onUploadSuccess) {
+        onUploadSuccess();
       } else {
-        // User is not logged in, upload to temporary storage first
-        await uploadGuestFiles(completedFiles);
-        // Trigger authentication flow immediately
-        onAuthRequired();
+        window.location.href = '/dashboard';
       }
-      
+
     } catch (error) {
       setErrors(['Upload failed. Please try again.']);
       console.error('Upload process failed:', error);
@@ -246,36 +182,6 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
     }
   };
 
-  // New function to handle upload button click for unauthenticated users
-  const handleUploadClick = async () => {
-    const completedFiles = uploadedFiles.filter(f => f.status === 'completed');
-    
-    if (completedFiles.length === 0) {
-      setErrors(['No files ready for upload']);
-      return;
-    }
-
-    // Check if user is authenticated
-    const authenticated = await checkAuthentication();
-    
-    if (!authenticated) {
-      // Store files temporarily and redirect to login immediately
-      setIsProcessing(true);
-      try {
-        await uploadGuestFiles(completedFiles);
-        // Trigger authentication flow
-        onAuthRequired();
-      } catch (error) {
-        setErrors(['Failed to prepare files for upload. Please try again.']);
-        console.error('Guest upload failed:', error);
-      } finally {
-        setIsProcessing(false);
-      }
-    } else {
-      // If authenticated, proceed with normal upload
-      await handleFinalUpload();
-    }
-  };
 
   const handleFileSelect = () => {
     fileInputRef.current?.click();
@@ -400,29 +306,6 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
             </div>
           </div>
 
-          {/* Login Option - Only show for authenticated users as a logout option */}
-          {!isAuthenticated && (
-            <div className="flex justify-center">
-              <div className="w-full">
-                <div className="text-center">
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-border"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="bg-background px-4 text-gray-600 file-upload-main-text">or</span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={onShowLogin}
-                    className="mt-4 text-primary hover:text-primary/80 transition-colors font-medium"
-                  >
-                    Already have an account? Login
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       ) : (
         /* Two-column layout - Show when files are uploaded */
@@ -552,8 +435,8 @@ export function FileUpload({ onAuthRequired, onShowLogin, isAuthenticated = fals
               {/* Upload Button - Show when files are completed */}
               {hasCompletedFiles && (
                 <div className="pt-4">
-                  <Button 
-                    onClick={handleUploadClick}
+                  <Button
+                    onClick={handleFinalUpload}
                     disabled={isProcessing}
                     className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
                     size="lg"

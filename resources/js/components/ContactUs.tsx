@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
-import { ArrowRight, Mail, User, X } from "lucide-react";
+import { ArrowRight, Mail, X } from "lucide-react";
+import { BetaAccessModal } from "./BetaAccessModal";
 
 interface ContactUsProps {
   onClose?: () => void;
+  onBetaAccessSuccess?: (email: string) => void;
 }
 
-export function ContactUs({ onClose }: ContactUsProps) {
+export function ContactUs({ onClose, onBetaAccessSuccess }: ContactUsProps) {
   const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [showBetaModal, setShowBetaModal] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +37,6 @@ export function ContactUs({ onClose }: ContactUsProps) {
         },
         body: JSON.stringify({
           email,
-          name: name || null,
         }),
       });
 
@@ -154,23 +155,6 @@ export function ContactUs({ onClose }: ContactUsProps) {
             </div>
           </div>
 
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-[#1A1A1A] mb-2">
-              Name (Optional)
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[#7A7A7A]" />
-              <input
-                type="text"
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-[#E6E9ED] rounded-lg focus:ring-2 focus:ring-[#2D5BFF] focus:border-transparent transition-colors"
-                placeholder="Enter your name"
-              />
-            </div>
-          </div>
-
           {error && (
             <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-lg">
               <p className="text-sm text-[#DC2626]">{error}</p>
@@ -195,7 +179,30 @@ export function ContactUs({ onClose }: ContactUsProps) {
             )}
           </Button>
         </form>
+
+        {/* Beta Access Link */}
+        <div className="pt-6 border-t border-gray-200 text-center">
+          <p className="text-sm text-gray-600 mb-2">Already have a beta access code?</p>
+          <button
+            onClick={() => setShowBetaModal(true)}
+            className="text-[#2D5BFF] hover:text-[#1E3FCC] font-semibold text-sm transition-colors hover:underline"
+          >
+            Access System with Code →
+          </button>
+        </div>
       </div>
+
+      {/* Beta Access Modal */}
+      <BetaAccessModal
+        isOpen={showBetaModal}
+        onClose={() => setShowBetaModal(false)}
+        onSuccess={(betaEmail) => {
+          setShowBetaModal(false);
+          if (onBetaAccessSuccess) {
+            onBetaAccessSuccess(betaEmail);
+          }
+        }}
+      />
     </div>
   );
 }

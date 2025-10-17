@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Key } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -10,14 +10,17 @@ import { useScrollAnimation } from "./hooks/useScrollAnimation";
 interface LoginProps {
   onLogin: () => void;
   onSwitchToRegister?: () => void;
+  isPrelaunch?: boolean;
 }
 
-export function Login({ onLogin, onSwitchToRegister }: LoginProps) {
+export function Login({ onLogin, onSwitchToRegister, isPrelaunch = false }: LoginProps) {
   const { ref, isVisible } = useScrollAnimation(0.3);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [betaToken, setBetaToken] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBetaLoading, setIsBetaLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
 const handleSubmit = async (e: React.FormEvent) => {
@@ -58,6 +61,43 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 };
 
+  const handleBetaTokenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsBetaLoading(true);
+    setError(null);
+
+    try {
+      // Get CSRF token
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token: csrfToken } = await tokenResponse.json();
+
+      const response = await fetch('/api/beta/activate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ token: betaToken.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        onLogin();
+      } else {
+        setError(data.message || 'Invalid access code. Please try again.');
+      }
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsBetaLoading(false);
+    }
+  };
+
   const handleGoogleLogin = () => {
     // Redirect to Google OAuth endpoint
     window.location.href = '/auth/google';
@@ -86,6 +126,59 @@ const handleSubmit = async (e: React.FormEvent) => {
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
+            )}
+
+            {/* Beta Token Login - Show during prelaunch */}
+            {isPrelaunch && (
+              <>
+                <form onSubmit={handleBetaTokenSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="betaToken" className="login-text font-medium">Beta Access Token</Label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="betaToken"
+                        type="text"
+                        placeholder="Enter your 32-character access code"
+                        value={betaToken}
+                        onChange={(e) => setBetaToken(e.target.value)}
+                        className="pl-10 h-12 bg-input-background border-border focus:border-primary focus:ring-primary/20 font-mono text-sm"
+                        maxLength={32}
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Use the access code from your welcome email
+                    </p>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isBetaLoading || betaToken.trim().length !== 32}
+                    className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+                  >
+                    {isBetaLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground border-t-transparent"></div>
+                        <span>Logging in...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <span>Login with Access Token</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </div>
+                    )}
+                  </Button>
+                </form>
+
+                {/* Divider */}
+                <div className="relative">
+                  <Separator />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="bg-card px-4 text-sm login-text font-medium">or use password</span>
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Social Login Buttons */}
@@ -215,10 +308,10 @@ const handleSubmit = async (e: React.FormEvent) => {
             </form>
 
             {/* Footer */}
-            {onSwitchToRegister && (
+            {onSwitchToRegister && !isPrelaunch && (
               <div className="text-center text-sm login-text">
                 Don't have an account?{" "}
-                <button 
+                <button
                   onClick={onSwitchToRegister}
                   className="signup-link-btn hover:opacity-80 transition-colors font-medium"
                 >

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\BetaUserMailingList;
+use App\Models\BetaAccessToken;
+use App\Mail\BetaWelcomeEmail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
@@ -41,6 +43,12 @@ class MailListController extends Controller
                 'user_agent' => $request->userAgent(),
                 'additional_data' => $additionalData,
             ]);
+
+            // Generate beta access token
+            $accessToken = BetaAccessToken::generateToken($request->email);
+
+            // Send welcome email with access token to user
+            Mail::to($request->email)->send(new BetaWelcomeEmail($accessToken, null));
 
             // Send notification email to admins
             $this->notifyAdmins($betaUser);
