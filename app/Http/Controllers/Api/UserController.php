@@ -206,4 +206,16 @@ class UserController extends Controller
             'has_resume' => $user->hasResume()
         ]);
     }
+
+    public function getCredits(Request $request)
+    {
+        $user = Auth::user();
+
+        return response()->json([
+            'credits' => $user->getRemainingCredits(),
+            'credits_used' => $user->credits_used,
+            'has_subscription' => $user->hasSubscription(),
+            'subscription_plan' => $user->getSubscriptionPlan(),
+        ]);
+    }
 }

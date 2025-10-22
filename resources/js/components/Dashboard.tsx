@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileText, Download, Edit3, CheckCircle2, Mail, Edit2, Briefcase, ChevronLeft, ChevronRight, DollarSign, MapPin, BriefcaseIcon } from "lucide-react";
+import { FileText, Download, Edit3, CheckCircle2, Mail, Edit2, Briefcase, ChevronLeft, ChevronRight, DollarSign, MapPin, BriefcaseIcon, User, CreditCard, Lock, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -85,6 +85,11 @@ export function Dashboard() {
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
+  // Account info state
+  const [userName, setUserName] = useState('');
+  const [userCredits, setUserCredits] = useState(0);
+  const [hasSubscription, setHasSubscription] = useState(false);
+
   const itemsPerPage = 10;
   useEffect(() => {
     fetchUploadedResume();
@@ -98,6 +103,7 @@ export function Dashboard() {
   useEffect(() => {
     if (activeTab === 'settings') {
       fetchUserSettings();
+      fetchAccountInfo();
     }
   }, [activeTab]);
 
@@ -199,9 +205,32 @@ const fetchUserInfo = async () => {
     if (response.ok) {
       const data = await response.json();
       setUserEmail(data.formData?.email || '');
+      setUserName(data.formData?.firstName && data.formData?.lastName
+        ? `${data.formData.firstName} ${data.formData.lastName}`
+        : '');
     }
   } catch (error) {
     console.error('Error fetching user info:', error);
+  }
+};
+
+const fetchAccountInfo = async () => {
+  try {
+    const response = await fetch('/api/user/credits', {
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setUserCredits(data.credits || 0);
+      setHasSubscription(data.has_subscription || false);
+    }
+  } catch (error) {
+    console.error('Error fetching account info:', error);
   }
 };
 
@@ -685,7 +714,7 @@ const fetchOAuthStatus = async () => {
 
         {/* Settings Tab */}
         {activeTab === 'settings' && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-7xl">
             {isSettingsLoading ? (
               <Card className="p-6">
                 <div className="flex items-center justify-center py-8">
@@ -697,6 +726,9 @@ const fetchOAuthStatus = async () => {
               </Card>
             ) : (
               <>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column - Settings */}
+                <div className="lg:col-span-2 space-y-6">
             {/* Email Notifications */}
             <Card className="p-6">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -997,17 +1029,99 @@ const fetchOAuthStatus = async () => {
               </div>
             </Card>
 
-            {/* Save Button */}
-            <div className="flex justify-end">
-              <Button
-                className="bg-primary hover:bg-primary/90"
-                onClick={handleSaveSettings}
-                disabled={isSavingSettings}
-              >
-                {isSavingSettings ? 'Saving...' : 'Save Settings'}
-              </Button>
-            </div>
-            </>
+                </div>
+
+                {/* Right Column - Account Info */}
+                <div className="space-y-6">
+                  <Card className="p-6">
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <User size={20} />
+                      Your Account Info
+                    </h3>
+                    <div className="space-y-4">
+                      {/* Full Name */}
+                      <div>
+                        <Label htmlFor="full-name" className="text-sm font-medium">Full Name</Label>
+                        <Input
+                          id="full-name"
+                          value={userName}
+                          onChange={(e) => setUserName(e.target.value)}
+                          placeholder="Enter your full name"
+                          className="mt-1"
+                        />
+                      </div>
+
+                      {/* Account Status */}
+                      <div>
+                        <Label className="text-sm font-medium">Account Status</Label>
+                        <div className="mt-1">
+                          <Badge
+                            style={hasSubscription ? { backgroundColor: '#8B5CF6', color: 'white' } : undefined}
+                            variant={hasSubscription ? undefined : "secondary"}
+                            className={hasSubscription ? "border-transparent" : ""}
+                          >
+                            {hasSubscription ? "Subscribed" : "Unsubscribed"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Token Balance */}
+                      <div>
+                        <Label className="text-sm font-medium flex items-center gap-2">
+                          <CreditCard size={16} />
+                          Token Balance
+                        </Label>
+                        <div className="mt-2">
+                          <div className="text-2xl font-semibold text-foreground">
+                            {hasSubscription ? (
+                              <span className="text-green-600">Unlimited</span>
+                            ) : (
+                              userCredits
+                            )}
+                          </div>
+                          {!hasSubscription && (
+                            <a href="#pricing" className="text-sm text-primary hover:underline mt-2 inline-block">
+                              Get More Tokens
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-t pt-4 space-y-3">
+                        {/* Change Password */}
+                        <Button variant="outline" className="w-full justify-start" asChild>
+                          <a href="#change-password" className="flex items-center gap-2">
+                            <Lock size={16} />
+                            Change Password
+                          </a>
+                        </Button>
+
+                        {/* Delete Account */}
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 size={16} className="mr-2" />
+                          Delete Account
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end py-4">
+                <Button
+                  className="bg-primary hover:bg-primary/90"
+                  onClick={handleSaveSettings}
+                  disabled={isSavingSettings}
+                >
+                  {isSavingSettings ? 'Saving...' : 'Save Settings'}
+                </Button>
+              </div>
+              </>
             )}
           </div>
         )}

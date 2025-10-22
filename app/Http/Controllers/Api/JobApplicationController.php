@@ -721,6 +721,18 @@ class JobApplicationController extends Controller
                 ], 404);
             }
 
+            // Check if user has enough credits (skip check for subscribed users)
+            $tokenCost = $lead->calculateTokenCost();
+            if (!$user->hasSubscription() && !$user->hasCredits($tokenCost)) {
+                return response()->json([
+                    'status' => 'insufficient_credits',
+                    'error' => 'Insufficient credits to apply to this job',
+                    'credits_required' => $tokenCost,
+                    'credits_available' => $user->getRemainingCredits(),
+                    'redirect_to' => '/subscribe'
+                ], 402); // 402 Payment Required
+            }
+
             // Get fields that need user input (quick check, no OpenAI calls)
             $fieldsNeedingInput = $this->applicationService->getFieldsNeedingUserInput($lead, $user->id);
 

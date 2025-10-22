@@ -8,11 +8,11 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Main job runs hourly - TEMPORARILY DISABLED DUE TO 403 IP BAN COOLDOWN
-// Schedule::command('hiring-cafe:fetch-jobs')
-//     ->hourly()
-//     ->withoutOverlapping(30)
-//     ->appendOutputTo(storage_path('logs/hiring_cafe_jobs.log'));
+// Main job runs hourly - using Playwright to bypass Vercel security checkpoint
+Schedule::job(new \App\Jobs\PlaywrightFetchJobsFromHiringCafe)
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->appendOutputTo(storage_path('logs/hiring_cafe_jobs_playwright.log'));
 
 // Discover new job matches and notify users - runs hourly
 Schedule::job(new \App\Jobs\DiscoverNewMatches)

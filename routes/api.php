@@ -32,6 +32,9 @@ Route::post('/mailing-list/subscribe', [\App\Http\Controllers\MailListController
 Route::post('/beta/activate', [\App\Http\Controllers\BetaAccessController::class, 'activate']);
 Route::get('/beta/check', [\App\Http\Controllers\BetaAccessController::class, 'check']);
 
+// Stripe webhook endpoint (must be outside auth middleware)
+Route::post('/stripe/webhook', [\App\Http\Controllers\Api\StripeWebhookController::class, 'handleWebhook']);
+
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/resume', [\App\Http\Controllers\Api\UserController::class, 'getResume']);
@@ -42,6 +45,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/oauth-status', [\App\Http\Controllers\Api\UserController::class, 'getOAuthStatus']);
     Route::get('/user/flow-rank', [\App\Http\Controllers\Api\UserController::class, 'getFlowRank']);
     Route::get('/user/has-resume', [\App\Http\Controllers\Api\UserController::class, 'hasResume']);
+    Route::get('/user/credits', [\App\Http\Controllers\Api\UserController::class, 'getCredits']);
 
     // User Settings
     Route::get('/user/settings', [\App\Http\Controllers\Api\UserSettingsController::class, 'index']);
@@ -75,6 +79,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/form-preferences/find', [FormPreferenceController::class, 'findPreference']);
     Route::patch('/form-preferences/confidence', [FormPreferenceController::class, 'updateConfidence']);
     
+    // Stripe payment endpoints
+    Route::post('/stripe/create-checkout-session', [\App\Http\Controllers\Api\StripeController::class, 'createCheckoutSession']);
+    Route::get('/stripe/session-status', [\App\Http\Controllers\Api\StripeController::class, 'getSessionStatus']);
+
     // Admin routes - Super Admin only
     Route::prefix('admin')->group(function () {
         Route::get('/scheduler-stats', [\App\Http\Controllers\Api\Admin\SchedulerStatsController::class, 'index']);

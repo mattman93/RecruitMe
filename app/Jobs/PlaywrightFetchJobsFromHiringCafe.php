@@ -7,18 +7,17 @@ use App\Models\Lead;
 use App\Models\SchedulerRun;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
-class FetchJobsFromHiringCafe implements ShouldQueue
+class PlaywrightFetchJobsFromHiringCafe implements ShouldQueue
 {
     use Queueable;
 
-    public $timeout = 300; // 5 minutes timeout
-    public $tries = 3;
+    public $timeout = 600; // 10 minutes timeout (browser automation is slower)
+    public $tries = 2;
 
     private $dataSource;
     private $jobsCollected = 0;
@@ -31,11 +30,11 @@ class FetchJobsFromHiringCafe implements ShouldQueue
 
     public function handle(): void
     {
-        Log::info('Starting FetchJobsFromHiringCafe job');
+        Log::info('Starting PlaywrightFetchJobsFromHiringCafe job');
 
         // Create scheduler run record
         $this->schedulerRun = SchedulerRun::create([
-            'job_name' => 'FetchJobsFromHiringCafe',
+            'job_name' => 'PlaywrightFetchJobsFromHiringCafe',
             'status' => 'success',
             'started_at' => now(),
         ]);
@@ -88,10 +87,10 @@ class FetchJobsFromHiringCafe implements ShouldQueue
                 'completed_at' => now(),
             ]);
 
-            Log::info("FetchJobsFromHiringCafe completed. Jobs collected: {$this->jobsCollected}, Duplicates skipped: {$this->duplicatesSkipped}, Errors: {$this->errorsEncountered}");
+            Log::info("PlaywrightFetchJobsFromHiringCafe completed. Jobs collected: {$this->jobsCollected}, Duplicates skipped: {$this->duplicatesSkipped}, Errors: {$this->errorsEncountered}");
 
         } catch (\Exception $e) {
-            Log::error('FetchJobsFromHiringCafe failed: ' . $e->getMessage());
+            Log::error('PlaywrightFetchJobsFromHiringCafe failed: ' . $e->getMessage());
             $this->sendErrorEmail('Job execution failed', $e->getMessage());
 
             // Update scheduler run with error
@@ -112,26 +111,26 @@ class FetchJobsFromHiringCafe implements ShouldQueue
 
     private function fetchAllJobs(): void
     {
-        $maxBatches = 1; // Maximum batches to fetch per run
+        $maxBatches = 3; // Maximum batches to fetch per run (increased from 1)
         $batchSize = 40; // Based on API response structure
-        $maxEstimatedPages = 3; // Estimate total pages available on hiring.cafe
-        
+        $maxEstimatedPages = 10; // Estimate total pages available on hiring.cafe (increased from 3)
+
         // Generate random pages to fetch for better discovery
         $randomPages = $this->generateRandomPages($maxBatches, $maxEstimatedPages);
-        
+
         Log::info("Fetching from randomized pages: " . implode(', ', $randomPages));
-        
+
         foreach ($randomPages as $page) {
             $hasJobs = $this->fetchJobsBatch($page, $batchSize);
-            
+
             // If a random page returns no jobs, it might be beyond the available data
             // but continue with other pages as they might have jobs
             if (!$hasJobs) {
                 Log::info("No jobs found on page {$page}, continuing with other pages");
             }
-            
-            // Add small delay between requests to be respectful to the API
-            usleep(5000000); // 0.5 second delay
+
+            // Add delay between requests to be respectful to the API
+            sleep(1); // 1 second delay between batches (reduced from 2)
         }
     }
 
@@ -144,64 +143,100 @@ class FetchJobsFromHiringCafe implements ShouldQueue
         $pages = [];
         $attempts = 0;
         $maxAttempts = $maxBatches * 3; // Prevent infinite loops
-        
+
         while (count($pages) < $maxBatches && $attempts < $maxAttempts) {
             $randomPage = random_int(1, $maxEstimatedPages);
-            
+
             // Ensure we don't duplicate pages
             if (!in_array($randomPage, $pages)) {
                 $pages[] = $randomPage;
             }
-            
+
             $attempts++;
         }
-        
+
         // Sort pages for consistent logging
         sort($pages);
-        
+
         return $pages;
     }
 
-private function fetchJobsBatch(int $page, int $size): bool
+    private function fetchJobsBatch(int $page, int $size): bool
     {
         $payload = $this->buildRequestPayload($page, $size);
-        
-        Log::info("Fetching jobs batch - Page: {$page}, Size: {$size}");
 
-        $response = Http::withHeaders($this->dataSource->headers)
-            ->timeout(30)
-            ->post($this->dataSource->url, $payload);
+        Log::info("Fetching jobs batch via Playwright - Page: {$page}, Size: {$size}");
 
-        // Handle 4xx/5xx responses immediately
-        if ($response->status() >= 400) {
-            $errorMessage = "HTTP {$response->status()} error from hiring.cafe API";
-            Log::error($errorMessage . ': ' . $response->body());
-            $this->sendErrorEmail('API Error - Potential IP Block', $errorMessage);
-            
-            // Stop the job immediately on client/server errors
-            throw new \Exception($errorMessage);
-        }
+        try {
+            $result = $this->executePlaywrightRequest($payload);
 
-        if (!$response->successful()) {
+            if (isset($result['error']) && $result['error']) {
+                $errorMessage = $result['message'] ?? 'Unknown error from Playwright script';
+                Log::error("Playwright error: {$errorMessage}");
+                $this->errorsEncountered++;
+                return false;
+            }
+
+            if (!isset($result['status']) || $result['status'] >= 400) {
+                $status = $result['status'] ?? 'unknown';
+                $errorMessage = "HTTP {$status} error from hiring.cafe API";
+                Log::error($errorMessage);
+                $this->errorsEncountered++;
+                return false;
+            }
+
+            $data = $result['data'] ?? [];
+
+            // Save raw response as JSON file
+            $this->saveRawResponse($data, $page);
+
+            // Process and store jobs
+            if (isset($data['results']) && is_array($data['results'])) {
+                $this->processJobs($data['results']);
+
+                // Check if there are more pages
+                return count($data['results']) >= $size;
+            }
+
+            return false;
+
+        } catch (\Exception $e) {
+            Log::error('Failed to execute Playwright request: ' . $e->getMessage());
             $this->errorsEncountered++;
-            Log::warning("API request failed with status: {$response->status()}");
             return false;
         }
+    }
 
-        $data = $response->json();
-        
-        // Save raw response as JSON file
-        $this->saveRawResponse($data, $page);
+    private function executePlaywrightRequest(array $payload): array
+    {
+        $scriptPath = base_path('scripts/fetch-hiring-cafe.js');
+        $url = $this->dataSource->url;
+        $headers = $this->dataSource->headers;
 
-        // Process and store jobs
-        if (isset($data['results']) && is_array($data['results'])) {
-            $this->processJobs($data['results']);
-            
-            // Check if there are more pages
-            return count($data['results']) >= $size;
+        // Escape JSON for shell
+        $headersJson = escapeshellarg(json_encode($headers));
+        $payloadJson = escapeshellarg(json_encode($payload));
+
+        // Execute the Node.js script
+        $command = "node {$scriptPath} {$url} {$headersJson} {$payloadJson} 2>&1";
+
+        Log::info("Executing Playwright script");
+
+        $output = shell_exec($command);
+
+        if (empty($output)) {
+            throw new \Exception('No output from Playwright script');
         }
 
-        return false;
+        // Parse JSON output
+        $result = json_decode($output, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            Log::error('Failed to parse Playwright output: ' . $output);
+            throw new \Exception('Invalid JSON from Playwright script: ' . json_last_error_msg());
+        }
+
+        return $result;
     }
 
     private function buildRequestPayload(int $page, int $size): array
@@ -209,25 +244,25 @@ private function fetchJobsBatch(int $page, int $size): bool
         $defaultPayload = $this->dataSource->custom_data['default_payload'];
         $defaultPayload['size'] = $size;
         $defaultPayload['page'] = $page;
-        
+
         // Rotate through job titles to get diverse results
         $jobTitle = $this->getRotatingJobTitle();
         $defaultPayload['searchState']['jobTitleQuery'] = $jobTitle;
-        
+
         Log::info("Using job title for search: {$jobTitle}");
-        
+
         return $defaultPayload;
     }
 
     private function getRotatingJobTitle(): string
     {
         $jobTitles = $this->dataSource->custom_data['job_titles'] ?? ['Software Engineer'];
-        
+
         // Use current hour to determine which job title to use
         // This ensures we cycle through different titles throughout the day
         $currentHour = now()->hour;
         $titleIndex = $currentHour % count($jobTitles);
-        
+
         $this->currentJobTitle = $jobTitles[$titleIndex];
         return $this->currentJobTitle;
     }
@@ -267,7 +302,7 @@ private function fetchJobsBatch(int $page, int $size): bool
         Lead::create([
             // Original fields
             'job_title' => $jobInfo['title'] ?? 'Unknown',
-            'company' => $companyData['name'] ?? 'Unknown', // FIX: Use company data
+            'company' => $companyData['name'] ?? 'Unknown',
             'pay_range' => $this->formatPayRange($processedData),
             'description' => strip_tags($jobInfo['description'] ?? ''),
             'location' => $this->truncateAndClean($processedData['formatted_workplace_location'], 1000),
@@ -319,13 +354,13 @@ private function fetchJobsBatch(int $page, int $size): bool
             'company_linkedin_url' => $companyData['linkedin_url'] ?? null,
             'company_size' => $companyData['num_employees'] ?? null,
             'company_industries' => json_encode($companyData['industries'] ?? []),
-            'company_tagline' => $this->cleanAndEncodeText($companyData['tagline']), // FIX: Clean UTF-8 encoding issues
+            'company_tagline' => $this->cleanAndEncodeText($companyData['tagline']),
             'company_founded_year' => $companyData['year_founded'] ?? null,
             'company_funding_series' => $companyData['latest_investment_series'] ?? null,
             'company_investors' => json_encode($companyData['investors'] ?? []),
             'company_headquarters_country' => $companyData['headquarters_country'] ?? null,
 
-            // Benefits and perks (FIX: Use correct field names)
+            // Benefits and perks
             'retirement_plan' => $processedData['401k_matching'] ?? false,
             'generous_parental_leave' => $processedData['generous_parental_leave'] ?? false,
             'visa_sponsorship' => $processedData['visa_sponsorship'] ?? false,
@@ -345,7 +380,7 @@ private function fetchJobsBatch(int $page, int $size): bool
             // Data quality and tracking
             'estimated_publish_date' => $this->parsePublishDate($processedData),
             'is_expired' => $jobData['is_expired'] ?? false,
-            'data_quality_score' => 'high', // hiring.cafe typically has high quality data
+            'data_quality_score' => 'high',
             'last_scraped_at' => now(),
             'requisition_id' => $jobData['requisition_id'] ?? null,
             'collapse_key' => $jobData['collapse_key'] ?? null,
@@ -356,17 +391,16 @@ private function fetchJobsBatch(int $page, int $size): bool
     {
         $min = $processedData['yearly_min_compensation'] ?? null;
         $max = $processedData['yearly_max_compensation'] ?? null;
-        
+
         if ($min && $max) {
             return '$' . number_format($min) . ' - $' . number_format($max);
         }
-        
+
         return 'Not specified';
     }
 
     private function parsePublishDate(array $processedData): ?string
     {
-        // Try to find publish date in various formats
         if (isset($processedData['estimated_publish_date_millis'])) {
             try {
                 return Carbon::createFromTimestamp($processedData['estimated_publish_date_millis'] / 1000)->toDateTimeString();
@@ -374,7 +408,7 @@ private function fetchJobsBatch(int $page, int $size): bool
                 Log::warning('Failed to parse publish date from millis: ' . $e->getMessage());
             }
         }
-        
+
         if (isset($processedData['estimated_publish_date'])) {
             try {
                 return Carbon::parse($processedData['estimated_publish_date'])->toDateTimeString();
@@ -382,15 +416,15 @@ private function fetchJobsBatch(int $page, int $size): bool
                 Log::warning('Failed to parse publish date: ' . $e->getMessage());
             }
         }
-        
+
         return null;
     }
 
     private function saveRawResponse(array $data, int $page): void
     {
         $timestamp = now()->format('Y-m-d_H-i-s');
-        $filename = "hiring_cafe_responses/{$timestamp}_page_{$page}.json";
-        
+        $filename = "hiring_cafe_responses/{$timestamp}_page_{$page}_playwright.json";
+
         Storage::disk('local')->put($filename, json_encode($data, JSON_PRETTY_PRINT));
         Log::info("Saved raw response to: {$filename}");
     }
@@ -403,8 +437,7 @@ private function fetchJobsBatch(int $page, int $size): bool
         $statusEmoji = $hasErrors ? '⚠️' : '✅';
         $statusText = $hasErrors ? 'Completed with Errors' : 'Successfully Completed';
 
-        // Log instead of emailing - admins can view via DataIngestionStats page
-        Log::info("{$statusEmoji} Hiring.cafe Job Fetch {$statusText}", [
+        Log::info("{$statusEmoji} Hiring.cafe Job Fetch (Playwright) {$statusText}", [
             'status' => $statusText,
             'search_term' => $this->currentJobTitle,
             'jobs_collected' => $this->jobsCollected,
@@ -418,34 +451,25 @@ private function fetchJobsBatch(int $page, int $size): bool
     {
         $nextAllowedTime = $this->dataSource->last_fetched_at?->copy()->addHour()?->format('H:i T') ?? 'Unknown';
 
-        // Log instead of emailing
-        Log::info('⏱️ Hiring.cafe Job Fetch - Rate Limited', [
+        Log::info('⏱️ Hiring.cafe Job Fetch (Playwright) - Rate Limited', [
             'status' => 'Rate Limited - Skipped',
             'last_fetch' => $this->dataSource->last_fetched_at?->format('Y-m-d H:i:s T') ?? 'Never',
             'next_allowed' => $nextAllowedTime
         ]);
     }
 
-    private function sendSuccessEmail(): void
-    {
-        // Legacy method - now handled by sendCompletionEmail
-        $this->sendCompletionEmail();
-    }
-
     private function sendErrorEmail(string $errorType, string $errorMessage): void
     {
-        // Log error instead of emailing - only send email for critical errors
-        Log::error("ALERT: Hiring.cafe Job Fetch Error - {$errorType}", [
+        Log::error("ALERT: Hiring.cafe Job Fetch (Playwright) Error - {$errorType}", [
             'error_type' => $errorType,
             'error_message' => $errorMessage,
             'jobs_collected_before_error' => $this->jobsCollected
         ]);
 
-        // Only send email for critical errors (API blocks, data source not found)
         if (in_array($errorType, ['Data source not found', 'API Error - Potential IP Block'])) {
-            $subject = "ALERT: Hiring.cafe Job Fetch Error - {$errorType}";
+            $subject = "ALERT: Hiring.cafe Job Fetch (Playwright) Error - {$errorType}";
             $message = "
-                <h2>⚠️ Hiring.cafe Job Fetch Error</h2>
+                <h2>⚠️ Hiring.cafe Job Fetch Error (Playwright)</h2>
                 <p><strong>Error Type:</strong> {$errorType}</p>
                 <p><strong>Error Message:</strong> {$errorMessage}</p>
                 <p><strong>Jobs collected before error:</strong> {$this->jobsCollected}</p>
@@ -463,66 +487,51 @@ private function fetchJobsBatch(int $page, int $size): bool
     {
         try {
             Log::info("Attempting to send email to: {$to}, Subject: {$subject}");
-            
+
             Mail::raw(strip_tags($message), function ($mail) use ($to, $subject, $message) {
                 $mail->to($to)
                      ->subject($subject)
                      ->html($message);
             });
-            
+
             Log::info("Email sent successfully to: {$to}");
         } catch (\Exception $e) {
             Log::error('Failed to send email: ' . $e->getMessage());
-            Log::error('Email details - To: ' . $to . ', Subject: ' . $subject);
         }
     }
 
-    /**
-     * Clean and truncate text field with proper encoding
-     */
     private function truncateAndClean(?string $text, int $maxLength): ?string
     {
         if (empty($text)) {
             return null;
         }
-        
-        // Strip HTML tags and clean encoding
+
         $cleaned = strip_tags($text);
         $cleaned = mb_convert_encoding($cleaned, 'UTF-8', 'UTF-8');
-        
-        // Truncate if too long
+
         if (mb_strlen($cleaned) > $maxLength) {
             $cleaned = mb_substr($cleaned, 0, $maxLength - 3) . '...';
         }
-        
+
         return $cleaned;
     }
 
-    /**
-     * Clean text with proper UTF-8 encoding and remove problematic characters
-     */
     private function cleanAndEncodeText(?string $text): ?string
     {
         if (empty($text)) {
             return null;
         }
-        
-        // Strip HTML tags first
+
         $cleaned = strip_tags($text);
-        
-        // Remove or replace problematic UTF-8 sequences
-        $cleaned = preg_replace('/\x{E2}\x{80}[\x{90}-\x{9F}]/u', ' ', $cleaned); // Replace em dashes, en dashes, etc.
-        $cleaned = preg_replace('/\x{E2}\x{80}[\x{A0}-\x{AF}]/u', '"', $cleaned); // Replace smart quotes
-        $cleaned = preg_replace('/[\x{00}-\x{08}\x{0B}\x{0C}\x{0E}-\x{1F}\x{7F}]/u', '', $cleaned); // Remove control chars
-        
-        // Ensure proper UTF-8 encoding
+        $cleaned = preg_replace('/\x{E2}\x{80}[\x{90}-\x{9F}]/u', ' ', $cleaned);
+        $cleaned = preg_replace('/\x{E2}\x{80}[\x{A0}-\x{AF}]/u', '"', $cleaned);
+        $cleaned = preg_replace('/[\x{00}-\x{08}\x{0B}\x{0C}\x{0E}-\x{1F}\x{7F}]/u', '', $cleaned);
         $cleaned = mb_convert_encoding($cleaned, 'UTF-8', 'UTF-8');
-        
-        // Truncate to reasonable length for taglines (being conservative)
+
         if (mb_strlen($cleaned) > 400) {
             $cleaned = mb_substr($cleaned, 0, 397) . '...';
         }
-        
+
         return trim($cleaned) ?: null;
     }
 }

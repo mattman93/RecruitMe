@@ -24,6 +24,13 @@ class User extends Authenticatable
         'google_id',
         'avatar',
         'user_role',
+        'credits',
+        'credits_used',
+        'stripe_customer_id',
+        'stripe_subscription_id',
+        'subscription_status',
+        'subscription_plan',
+        'subscription_ends_at',
     ];
 
     // User role constants
@@ -51,6 +58,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'subscription_ends_at' => 'datetime',
         ];
     }
 
@@ -109,5 +117,76 @@ class User extends Authenticatable
     public function canAccessAdmin(): bool
     {
         return $this->user_role >= self::ROLE_STAFF;
+    }
+
+    /**
+     * Check if user has enough credits
+     */
+    public function hasCredits(int $amount = 1): bool
+    {
+        return $this->credits >= $amount;
+    }
+
+    /**
+     * Use credits (deduct from balance)
+     */
+    public function useCredits(int $amount = 1): bool
+    {
+        if (!$this->hasCredits($amount)) {
+            return false;
+        }
+
+        $this->decrement('credits', $amount);
+        $this->increment('credits_used', $amount);
+
+        return true;
+    }
+
+    /**
+     * Add credits to user balance
+     */
+    public function addCredits(int $amount): void
+    {
+        $this->increment('credits', $amount);
+    }
+
+    /**
+     * Get remaining credits
+     */
+    public function getRemainingCredits(): int
+    {
+        return $this->credits;
+    }
+
+    /**
+     * Check if user has an active subscription
+     */
+    public function hasSubscription(): bool
+    {
+        return $this->subscription_status === 'active';
+    }
+
+    /**
+     * Check if subscription is active
+     */
+    public function isSubscriptionActive(): bool
+    {
+        return $this->hasSubscription();
+    }
+
+    /**
+     * Get subscription plan name
+     */
+    public function getSubscriptionPlan(): ?string
+    {
+        return $this->subscription_plan;
+    }
+
+    /**
+     * Check if user has unlimited credits (via active subscription)
+     */
+    public function hasUnlimitedCredits(): bool
+    {
+        return $this->hasSubscription();
     }
 }

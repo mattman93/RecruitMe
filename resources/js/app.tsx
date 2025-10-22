@@ -18,8 +18,10 @@ import { ContactUs } from "./components/ContactUs";
 import { DataIngestionStats } from "./components/DataIngestionStats";
 import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { TermsOfService } from "./components/TermsOfService";
+import { Subscribe } from "./components/Subscribe";
+import { SubscribeSuccess } from "./components/SubscribeSuccess";
 
-type AppState = 'loading' | 'guest' | 'login' | 'register' | 'authenticated' | 'upload' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms';
+type AppState = 'loading' | 'guest' | 'login' | 'register' | 'authenticated' | 'upload' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms' | 'subscribe' | 'subscribe-success';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
@@ -71,6 +73,10 @@ export default function App() {
         // Check if we're on the dashboard route
         if (window.location.pathname === '/dashboard') {
           setAppState('authenticated');
+        } else if (window.location.pathname === '/subscribe') {
+          setAppState('subscribe');
+        } else if (window.location.pathname === '/subscribe/success') {
+          setAppState('subscribe-success');
         } else if (window.location.pathname === '/enterprise') {
           setAppState('enterprise');
         } else if (window.location.pathname === '/admin/data-ingestion') {
@@ -91,6 +97,10 @@ export default function App() {
           setAppState('privacy');
         } else if (window.location.pathname === '/terms') {
           setAppState('terms');
+        } else if (window.location.pathname === '/subscribe') {
+          setAppState('subscribe');
+        } else if (window.location.pathname === '/subscribe/success') {
+          setAppState('subscribe-success');
         } else {
           setAppState('guest');
         }
@@ -103,11 +113,14 @@ export default function App() {
   };
 
   const handleSwitchToRegister = () => {
-    // Prevent registration during prelaunch
-    if (isPrelaunch) {
-      setAppState('contact-us');
-    } else {
+    // Check if user has paid (has stripe session in localStorage)
+    const stripeSessionId = localStorage.getItem('stripe_session_id');
+
+    // Allow registration if user has paid, even in prelaunch mode
+    if (stripeSessionId || !isPrelaunch) {
       setAppState('register');
+    } else {
+      setAppState('contact-us');
     }
   };
 
@@ -200,6 +213,10 @@ export default function App() {
     window.location.href = '/enterprise';
   };
 
+  const handleGoPricing = () => {
+    window.location.href = '/subscribe';
+  };
+
   const handleShowLogin = () => {
     if (isPrelaunch && !hasBetaAccess) {
       setAppState('contact-us');
@@ -224,7 +241,7 @@ export default function App() {
   if (appState === 'login') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-md space-y-6">
             <div className="text-center">
@@ -273,7 +290,7 @@ export default function App() {
 
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
         <Register onRegister={handleRegister} onSwitchToLogin={handleSwitchToLogin} />
       </div>
     );
@@ -283,7 +300,7 @@ export default function App() {
   if (appState === 'upload') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full">
             <div className="text-center mb-8">
@@ -309,7 +326,7 @@ export default function App() {
   if (appState === 'guest') {
       return (
         <div className="min-h-screen bg-white">
-          <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+          <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
           <HeroSection onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
           <ValuePreview />
           <CoreBenefits />
@@ -325,7 +342,7 @@ export default function App() {
     if (appState === 'enterprise') {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
         <Enterprise />
         <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
       </div>
@@ -372,7 +389,7 @@ export default function App() {
   if (appState === 'admin-data-ingestion') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
         <DataIngestionStats />
       </div>
     );
@@ -382,7 +399,7 @@ export default function App() {
   if (appState === 'privacy') {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
         <PrivacyPolicy />
         <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
       </div>
@@ -393,17 +410,39 @@ export default function App() {
   if (appState === 'terms') {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
         <TermsOfService />
         <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
       </div>
     );
   }
 
+  // Subscribe state
+  if (appState === 'subscribe') {
+    console.log('App.tsx - rendering Subscribe, isUserAuthenticated:', isUserAuthenticated);
+    return (
+      <Subscribe
+        onBack={isUserAuthenticated ? handleGoDashboard : handleGoHome}
+        isAuthenticated={isUserAuthenticated}
+      />
+    );
+  }
+
+  // Subscribe Success state
+  if (appState === 'subscribe-success') {
+    return (
+      <SubscribeSuccess
+        onReturnToDashboard={handleGoDashboard}
+        onRegister={handleSwitchToRegister}
+        isAuthenticated={isUserAuthenticated}
+      />
+    );
+  }
+
   // Authenticated state
   return (
     <div className="min-h-screen flex flex-col bg-white">
-      <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} />
+      <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
       <Dashboard />
     </div>
   );

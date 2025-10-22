@@ -51,6 +51,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   const [flowRank, setFlowRank] = useState<number>(0);
   const [hasResume, setHasResume] = useState<boolean>(false);
   const [hasActiveFilters, setHasActiveFilters] = useState<boolean>(false);
+  const [credits, setCredits] = useState<number>(0);
+  const [creditsAnimating, setCreditsAnimating] = useState<boolean>(false);
+  const [hasSubscription, setHasSubscription] = useState<boolean>(false);
 
   // Application processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -75,6 +78,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
     fetchUserFormData();
     fetchFlowRank();
     fetchUserSettings();
+    fetchCredits();
   }, []);
 
   // Update activeLeads when leads change
@@ -217,6 +221,36 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
       }
     } catch (error) {
       console.error('Error fetching user settings:', error);
+    }
+  };
+
+  const fetchCredits = async (animate: boolean = false) => {
+    try {
+      const response = await fetch('/api/user/credits', {
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newCredits = data.credits || 0;
+        setHasSubscription(data.has_subscription || false);
+
+        if (animate && newCredits !== credits) {
+          setCreditsAnimating(true);
+          setTimeout(() => {
+            setCredits(newCredits);
+            setTimeout(() => setCreditsAnimating(false), 600);
+          }, 100);
+        } else {
+          setCredits(newCredits);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching credits:', error);
     }
   };
 
@@ -384,7 +418,13 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
             return;
           }
 
-          if (result.status === 'submitted' || result.status === 'success') {
+          if (result.status === 'insufficient_credits') {
+            // Out of credits - redirect to subscribe page
+            setAnimationStage('idle');
+            setIsProcessing(false);
+            window.location.href = '/subscribe';
+            return;
+          } else if (result.status === 'submitted' || result.status === 'success') {
             // Show success overlay
             setAnimationStage('success-showing');
 
@@ -431,8 +471,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
     const currentLead = activeLeads[0];
     setCompletedApplications(prev => [...prev, currentLead.id]);
 
-    // Refresh FlowRank after application
+    // Refresh FlowRank and credits after application
     fetchFlowRank();
+    fetchCredits(true);
 
     // Start exit animation
     setRemovingJobId(currentLead.id);
@@ -455,8 +496,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
     const currentLead = activeLeads[0]; // Always working with the first card now
     setCompletedApplications(prev => [...prev, currentLead.id]);
 
-    // Refresh FlowRank after application
+    // Refresh FlowRank and credits after application
     fetchFlowRank();
+    fetchCredits(true);
 
     // Close modal
     setModalOpen(false);
@@ -613,9 +655,40 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
             </Badge>
           )}
         </div>
-        <Badge variant="secondary" className="px-3 py-1">
-          {activeLeads.length} of {totalPotentialMatches > leads.length ? `${totalPotentialMatches}+` : totalPotentialMatches} jobs
-        </Badge>
+        <div className="flex items-center gap-2">
+          {hasSubscription ? (
+            <Badge
+              style={{
+                backgroundColor: '#8B5CF6',
+                color: 'white'
+              }}
+              className="px-3 py-1 border-transparent"
+            >
+              Subscribed
+            </Badge>
+          ) : (
+            <Badge
+              style={{
+                backgroundImage: 'linear-gradient(135deg, #10b981, #059669)',
+                opacity: 0.9,
+                transform: creditsAnimating ? 'scale(1.1)' : 'scale(1)',
+                transition: 'transform 0.3s ease-in-out'
+              }}
+              className="text-white px-3 py-1 border-transparent"
+            >
+              <span style={{
+                display: 'inline-block',
+                transition: 'opacity 0.3s ease-in-out',
+                opacity: creditsAnimating ? 0.5 : 1
+              }}>
+                tokens: {credits}
+              </span>
+            </Badge>
+          )}
+          <Badge variant="secondary" className="px-3 py-1">
+            {activeLeads.length} of {totalPotentialMatches > leads.length ? `${totalPotentialMatches}+` : totalPotentialMatches} jobs
+          </Badge>
+        </div>
       </div>
 
       {/* No Resume Warning */}

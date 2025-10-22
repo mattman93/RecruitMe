@@ -10,9 +10,10 @@ interface NavbarProps {
   onHome?: () => void;
   onDashboard?: () => void;
   onEnterprise?: () => void;
+  onPricing?: () => void;
 }
 
-export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard, onEnterprise }: NavbarProps) {
+export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard, onEnterprise, onPricing }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -54,6 +55,13 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
 
         {/* Right side navigation */}
         <div className="flex items-center gap-4">
+          <button
+            onClick={onPricing}
+            className="text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors"
+          >
+            Pricing
+          </button>
+
           {!isAuthenticated ? (
             <>
               <button
@@ -76,7 +84,7 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
                 onClick={onDashboard}
                 className="text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors"
               >
-                Jobs Dashboard
+                Dashboard
               </button>
 
               <Button
@@ -120,11 +128,21 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                       >
                         <Shield className="h-4 w-4 text-purple-600" />
-                        Admin Dashboard
+                        admin
                       </button>
                       <div className="border-t border-gray-200 my-2" />
                     </>
                   )}
+
+                  <button
+                    onClick={() => {
+                      onPricing?.();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    pricing
+                  </button>
 
                   {isAuthenticated ? (
                     <>
@@ -135,7 +153,7 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
                         }}
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
                       >
-                        Jobs Dashboard
+                        dashboard
                       </button>
                       <button
                         onClick={() => {
@@ -144,7 +162,7 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
                         }}
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
                       >
-                        Home
+                        home
                       </button>
                       <div className="border-t border-gray-200 my-2" />
                       <button

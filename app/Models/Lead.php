@@ -165,4 +165,99 @@ class Lead extends Model
     {
         return $this->jobSiteStructure() !== null;
     }
+
+    /**
+     * Calculate dynamic token cost based on job quality metrics
+     * Base cost: 40 tokens
+     * Premium factors can increase up to 60+ tokens
+     */
+    public function calculateTokenCost(): int
+    {
+        $baseCost = 40;
+        $premiumPoints = 0;
+
+        // High salary range (+5 points)
+        if ($this->yearly_min_compensation && $this->yearly_min_compensation >= 120000) {
+            $premiumPoints += 5;
+        }
+        if ($this->yearly_min_compensation && $this->yearly_min_compensation >= 150000) {
+            $premiumPoints += 3; // Extra for very high salary
+        }
+
+        // Remote work (+4 points)
+        if ($this->remote_work_available || strtolower($this->workplace_type ?? '') === 'remote') {
+            $premiumPoints += 4;
+        }
+
+        // Big tech companies (+6 points)
+        $bigTechCompanies = [
+            'google', 'meta', 'facebook', 'amazon', 'apple', 'microsoft', 'netflix',
+            'tesla', 'nvidia', 'salesforce', 'oracle', 'adobe', 'uber', 'airbnb',
+            'stripe', 'square', 'coinbase', 'databricks', 'snowflake', 'palantir',
+            'openai', 'anthropic', 'spacex', 'twitter', 'x corp', 'linkedin'
+        ];
+        $companyLower = strtolower($this->company ?? '');
+        foreach ($bigTechCompanies as $bigTech) {
+            if (str_contains($companyLower, $bigTech)) {
+                $premiumPoints += 6;
+                break;
+            }
+        }
+
+        // Senior/Staff/Principal roles (+4 points)
+        $seniorKeywords = ['senior', 'staff', 'principal', 'lead', 'architect', 'director', 'vp'];
+        $titleLower = strtolower($this->job_title ?? '');
+        foreach ($seniorKeywords as $keyword) {
+            if (str_contains($titleLower, $keyword)) {
+                $premiumPoints += 4;
+                break;
+            }
+        }
+
+        // Well-funded startups - Series B+ (+3 points)
+        $fundingSeries = strtolower($this->company_funding_series ?? '');
+        if (in_array($fundingSeries, ['series b', 'series c', 'series d', 'series e', 'ipo', 'public'])) {
+            $premiumPoints += 3;
+        }
+
+        // Generous benefits package (+2 points for 3+ benefits)
+        $benefitsCount = 0;
+        if ($this->retirement_plan) $benefitsCount++;
+        if ($this->generous_parental_leave) $benefitsCount++;
+        if ($this->visa_sponsorship) $benefitsCount++;
+        if ($this->relocation_assistance) $benefitsCount++;
+        if ($this->tuition_reimbursement) $benefitsCount++;
+        if ($this->generous_paid_time_off) $benefitsCount++;
+
+        if ($benefitsCount >= 3) {
+            $premiumPoints += 2;
+        }
+
+        // Compensation transparency (+2 points)
+        if ($this->is_compensation_transparent) {
+            $premiumPoints += 2;
+        }
+
+        // Recent posting - within 7 days (+3 points)
+        if ($this->estimated_publish_date && $this->estimated_publish_date->greaterThan(now()->subDays(7))) {
+            $premiumPoints += 3;
+        }
+
+        // High data quality score (+2 points if score >= 80)
+        if ($this->data_quality_score && $this->data_quality_score >= 80) {
+            $premiumPoints += 2;
+        }
+
+        // Desirable locations (+3 points)
+        $desirableLocations = ['san francisco', 'new york', 'seattle', 'austin', 'boston', 'palo alto', 'mountain view'];
+        $locationLower = strtolower($this->location ?? '');
+        foreach ($desirableLocations as $location) {
+            if (str_contains($locationLower, $location)) {
+                $premiumPoints += 3;
+                break;
+            }
+        }
+
+        return min($baseCost + $premiumPoints, 80); // Cap at 80 tokens
+    }
 }

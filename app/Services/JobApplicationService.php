@@ -96,6 +96,25 @@ class JobApplicationService
                     'final_application_url' => null // No longer applicable for email-based applications
                 ]);
 
+                // Deduct credits from user based on job quality (skip for subscribed users)
+                $user = $application->user;
+                if ($user && !$user->hasSubscription()) {
+                    $tokenCost = $application->lead->calculateTokenCost();
+                    $user->useCredits($tokenCost);
+                    Log::info('Credits deducted for job application', [
+                        'application_id' => $application->id,
+                        'user_id' => $user->id,
+                        'tokens_cost' => $tokenCost,
+                        'remaining_credits' => $user->getRemainingCredits()
+                    ]);
+                } elseif ($user && $user->hasSubscription()) {
+                    Log::info('Subscription user - no credits deducted', [
+                        'application_id' => $application->id,
+                        'user_id' => $user->id,
+                        'subscription_plan' => $user->getSubscriptionPlan()
+                    ]);
+                }
+
                 $this->logStep($application, "Application email sent successfully to {$emailsSent} contact(s)");
                 return true;
             } else {

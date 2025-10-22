@@ -131,7 +131,11 @@ export function JobApplicationModal({
     setAutomationResult(result);
 
     // Handle different result statuses
-    if (result.status === 'needs_user_input') {
+    if (result.status === 'insufficient_credits') {
+      // Out of credits - redirect to subscribe page
+      window.location.href = '/subscribe';
+      return;
+    } else if (result.status === 'needs_user_input') {
       setMissingFields(result.missing_fields || []);
       setSessionId(result.session_id || '');
       setAutomationState('needs_input');

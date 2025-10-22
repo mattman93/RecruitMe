@@ -111,6 +111,15 @@ Route::get('/upload', function () {
     return Inertia::render('Welcome'); // Use existing Welcome page with FileUpload
 })->middleware(['auth'])->name('upload');
 
+// Subscription routes (public - allow unauthenticated users to subscribe)
+Route::get('/subscribe', function () {
+    return Inertia::render('Welcome'); // Load the React SPA which will handle the subscribe state
+})->name('subscribe');
+
+Route::get('/subscribe/success', function () {
+    return Inertia::render('Welcome'); // Load the React SPA which will handle the subscribe-success state
+})->name('subscribe.success');
+
 // Enterprise route
 Route::get('/enterprise', function () {
     return Inertia::render('Welcome'); // Load the React SPA which will handle the enterprise state
