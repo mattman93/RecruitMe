@@ -35,6 +35,9 @@ Route::get('/beta/check', [\App\Http\Controllers\BetaAccessController::class, 'c
 // Stripe webhook endpoint (must be outside auth middleware)
 Route::post('/stripe/webhook', [\App\Http\Controllers\Api\StripeWebhookController::class, 'handleWebhook']);
 
+// Stripe pricing configuration (public endpoint - unauthenticated users need to see pricing)
+Route::get('/stripe/pricing-config', [\App\Http\Controllers\Api\StripeController::class, 'getPricingConfig']);
+
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/resume', [\App\Http\Controllers\Api\UserController::class, 'getResume']);

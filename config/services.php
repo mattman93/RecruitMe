@@ -45,6 +45,14 @@ return [
         'publishable_key' => env('STRIPE_PUBLISHABLE_KEY'),
         'secret_key' => env('STRIPE_SECRET_KEY'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'products' => [
+            'starter' => env('STRIPE_STARTER_PRODUCT_ID'),
+            'pro' => env('STRIPE_PRO_PRODUCT_ID'),
+        ],
+        'prices' => [
+            'starter' => env('STRIPE_STARTER_PRICE_ID'),
+            'pro' => env('STRIPE_PRO_PRICE_ID'),
+        ],
     ],
 
 ];

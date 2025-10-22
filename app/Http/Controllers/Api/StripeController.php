@@ -89,4 +89,18 @@ class StripeController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get pricing configuration (public endpoint)
+     */
+    public function getPricingConfig()
+    {
+        return response()->json([
+            'prices' => [
+                'starter' => config('services.stripe.prices.starter'),
+                'pro' => config('services.stripe.prices.pro'),
+            ],
+            'publishable_key' => config('services.stripe.publishable_key'),
+        ]);
+    }
 }

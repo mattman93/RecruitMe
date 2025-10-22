@@ -209,10 +209,14 @@ class StripeWebhookController extends Controller
      */
     protected function determinePlan($priceId, $productId)
     {
+        // Get product IDs from config (set via .env)
+        $starterProductId = config('services.stripe.products.starter');
+        $proProductId = config('services.stripe.products.pro');
+
         // Map Stripe product IDs to plan names
         $productMapping = [
-            'prod_THEIn7wWoK4Vi0' => 'starter',
-            'prod_THEIWxs4BwkyZF' => 'pro',
+            $starterProductId => 'starter',
+            $proProductId => 'pro',
         ];
 
         if ($productId && isset($productMapping[$productId])) {

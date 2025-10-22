@@ -1,12 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft, Check, Sparkles, Rocket } from 'lucide-react';
 
-// Load Stripe with publishable key from environment
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+// Stripe promise will be initialized after fetching config
+let stripePromise: Promise<any> | null = null;
 
 interface SubscribeProps {
   onBack?: () => void;
@@ -15,8 +15,38 @@ interface SubscribeProps {
 
 export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   const [priceId, setPriceId] = useState<string | null>(null);
+  const [pricingConfig, setPricingConfig] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   console.log('Subscribe component - isAuthenticated:', isAuthenticated);
+
+  // Fetch pricing configuration from backend
+  useEffect(() => {
+    const fetchPricingConfig = async () => {
+      try {
+        const response = await fetch('/api/stripe/pricing-config', {
+          credentials: 'include',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        const data = await response.json();
+        setPricingConfig(data);
+
+        // Initialize Stripe with the publishable key from backend
+        if (!stripePromise && data.publishable_key) {
+          stripePromise = loadStripe(data.publishable_key);
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to fetch pricing config:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchPricingConfig();
+  }, []);
 
   const fetchClientSecret = useCallback(async () => {
     // Get CSRF token from API
@@ -43,14 +73,15 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
     return data.clientSecret;
   }, [priceId]);
 
-  const plans = [
+  // Build plans with price IDs from backend config
+  const plans = pricingConfig ? [
     {
       name: "Self Starter Tier",
       price: "$29",
       period: "per month",
       description: "Perfect for individual job seekers getting started",
       icon: <Sparkles className="h-8 w-8" />,
-      priceId: 'price_1SKfpxIIqzkLHLVez9kDO54k',
+      priceId: pricingConfig.prices.starter,
       features: [
         "Unlimited applications per month",
         "AI-powered resume analysis",
@@ -65,7 +96,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
       period: "per month",
       description: "For serious professionals maximizing their job search",
       icon: <Rocket className="h-8 w-8" />,
-      priceId: 'price_1SKfqIIIqzkLHLVe6HuiV8wh',
+      priceId: pricingConfig.prices.pro,
       features: [
         "Unlimited job applications",
         "Advanced AI resume & cover letter generation",
@@ -80,7 +111,19 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
       ],
       isPopular: true
     }
-  ];
+  ] : [];
+
+  // Show loading state while fetching pricing config
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
+          <span className="text-primary">Loading pricing...</span>
+        </div>
+      </div>
+    );
+  }
 
   // If no price selected yet, show pricing options
   if (!priceId) {
@@ -211,12 +254,21 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
           </div>
 
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <EmbeddedCheckoutProvider
-              stripe={stripePromise}
-              options={{ fetchClientSecret }}
-            >
-              <EmbeddedCheckout />
-            </EmbeddedCheckoutProvider>
+            {stripePromise ? (
+              <EmbeddedCheckoutProvider
+                stripe={stripePromise}
+                options={{ fetchClientSecret }}
+              >
+                <EmbeddedCheckout />
+              </EmbeddedCheckoutProvider>
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+                  <p className="text-[#4A4A4A]">Initializing payment...</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
