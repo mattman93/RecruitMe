@@ -14,7 +14,8 @@ interface SubscribeProps {
 }
 
 export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
-  const [priceId, setPriceId] = useState<string | null>(null);
+  // TEMPORARY: Set to null for normal flow, or set to a price_id to test checkout directly
+  const [priceId, setPriceId] = useState<string | null>(null); // Change to price ID to test checkout
   const [pricingConfig, setPricingConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +43,18 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
         // Initialize Stripe with the publishable key from backend
         if (!stripePromise && data.publishable_key) {
           stripePromise = loadStripe(data.publishable_key);
+        }
+
+        // Check for plan query parameter (e.g., ?plan=starter or ?plan=pro)
+        const urlParams = new URLSearchParams(window.location.search);
+        const plan = urlParams.get('plan');
+
+        if (plan && data.prices) {
+          if (plan === 'starter' && data.prices.starter) {
+            setPriceId(data.prices.starter);
+          } else if (plan === 'pro' && data.prices.pro) {
+            setPriceId(data.prices.pro);
+          }
         }
 
         setLoading(false);
@@ -266,43 +279,80 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
 
   // Show embedded checkout
   return (
-    <div className="min-h-screen bg-white">
-      <div className="bg-gradient-to-br from-[#F7F8FA] to-white pt-12 pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#F5F8FF] to-white">
+      <div className="pt-12 pb-8">
         <div className="max-w-4xl mx-auto px-6">
           <Button
             variant="ghost"
             onClick={() => setPriceId(null)}
-            className="mb-6"
+            className="mb-6 hover:bg-[#F5F8FF]"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Plans
           </Button>
 
           <div className="text-center mb-8">
+            {/* Purple accent badge */}
+            <div className="inline-flex items-center justify-center mb-4">
+              <div className="flex items-center gap-2 px-4 py-2 bg-[#2D5BFF] rounded-full">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-white">Secure Checkout</span>
+              </div>
+            </div>
+
             <h1 className="text-3xl font-bold text-[#1A1A1A] mb-2">
               Complete Your Subscription
             </h1>
             <p className="text-[#4A4A4A]">
-              Secure payment powered by Stripe
+              Join AppliFlow and accelerate your job search
             </p>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            {stripePromise ? (
-              <EmbeddedCheckoutProvider
-                stripe={stripePromise}
-                options={{ fetchClientSecret }}
-              >
-                <EmbeddedCheckout />
-              </EmbeddedCheckoutProvider>
-            ) : (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
-                  <p className="text-[#4A4A4A]">Initializing payment...</p>
+          {/* Branded container with purple accent border */}
+          <div className="relative">
+            {/* Purple gradient border effect */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#2D5BFF] to-[#8B5CF6] rounded-lg opacity-20 blur"></div>
+
+            {/* Main checkout container */}
+            <div className="relative bg-white rounded-lg shadow-xl p-8 border-2 border-[#2D5BFF] border-opacity-20">
+              {stripePromise ? (
+                <EmbeddedCheckoutProvider
+                  stripe={stripePromise}
+                  options={{ fetchClientSecret }}
+                >
+                  <EmbeddedCheckout />
+                </EmbeddedCheckoutProvider>
+              ) : (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#2D5BFF] border-t-transparent mx-auto mb-4"></div>
+                    <p className="text-[#4A4A4A]">Initializing payment...</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+
+          {/* Trust badges */}
+          <div className="mt-6 flex items-center justify-center gap-6 text-sm text-[#4A4A4A]">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-[#2D5BFF]" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              <span>Secure Payment</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-[#2D5BFF]" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>Cancel Anytime</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-[#2D5BFF]" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8zM12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+              </svg>
+              <span>Money-Back Guarantee</span>
+            </div>
           </div>
         </div>
       </div>
