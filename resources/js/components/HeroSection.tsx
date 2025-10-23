@@ -24,6 +24,26 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Add keyframe animation for subtle floating effect
+  const floatKeyframes = `
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0px);
+      }
+      50% {
+        transform: translateY(-3px);
+      }
+    }
+  `;
+
+  // Inject keyframes into document
+  if (typeof document !== 'undefined' && !document.getElementById('float-animation')) {
+    const style = document.createElement('style');
+    style.id = 'float-animation';
+    style.textContent = floatKeyframes;
+    document.head.appendChild(style);
+  }
+
   const handleFileUpload = async (files: FileList) => {
     if (files.length === 0) return;
 
@@ -160,18 +180,22 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-3">
-                    <div className="p-3 bg-white/20 rounded-full backdrop-blur-sm">
+                    <div
+                      className="p-3 bg-white/20 rounded-full backdrop-blur-sm"
+                      style={{
+                        animation: 'float 3s ease-in-out infinite'
+                      }}
+                    >
                       <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
                     </div>
                     <div>
                       <p className="text-white font-semibold text-lg mb-1">
-                        Upload your resume to see your matches
+                        Find jobs that match your resume instantly
                       </p>
                       <p className="text-white text-sm">
-                        Drop your file here or{" "}
-                        <span className="underline font-medium">click to browse</span>
+                        Drop your resume to see what roles fit you best.
                       </p>
                     </div>
                   </div>

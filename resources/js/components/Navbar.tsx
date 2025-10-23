@@ -75,7 +75,7 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
                 onClick={onEnterprise}
                 className="bg-[#2D5BFF] hover:bg-[#1E3FCC] text-white px-6 py-2"
               >
-                AppliFlow Enterprise
+                For Teams
               </Button>
             </>
           ) : (
@@ -193,7 +193,7 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
                         }}
                         className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
                       >
-                        AppliFlow Enterprise
+                        For Teams
                       </button>
                     </>
                   )}
