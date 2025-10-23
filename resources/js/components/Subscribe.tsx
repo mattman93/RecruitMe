@@ -17,6 +17,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   const [priceId, setPriceId] = useState<string | null>(null);
   const [pricingConfig, setPricingConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   console.log('Subscribe component - isAuthenticated:', isAuthenticated);
 
@@ -30,6 +31,11 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
             'X-Requested-With': 'XMLHttpRequest',
           },
         });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load pricing: ${response.status}`);
+        }
+
         const data = await response.json();
         setPricingConfig(data);
 
@@ -41,6 +47,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
         setLoading(false);
       } catch (error) {
         console.error('Failed to fetch pricing config:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load pricing');
         setLoading(false);
       }
     };
@@ -74,7 +81,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   }, [priceId]);
 
   // Build plans with price IDs from backend config
-  const plans = pricingConfig ? [
+  const plans = (pricingConfig && pricingConfig.prices) ? [
     {
       name: "Self Starter Tier",
       price: "$29",
@@ -120,6 +127,33 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
         <div className="flex items-center space-x-2">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
           <span className="text-primary">Loading pricing...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if pricing config failed to load
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+              <span className="text-red-600 text-2xl">⚠️</span>
+            </div>
+            <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">Unable to Load Pricing</h2>
+            <p className="text-[#4A4A4A] mb-6">{error}</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <Button onClick={() => window.location.reload()} className="bg-[#2D5BFF] hover:bg-[#1E3FCC] text-white">
+              Try Again
+            </Button>
+            {onBack && (
+              <Button onClick={onBack} variant="outline" className="border-[#E6E9ED]">
+                Go Back
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );
