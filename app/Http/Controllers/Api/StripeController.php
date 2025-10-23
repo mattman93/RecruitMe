@@ -19,45 +19,56 @@ class StripeController extends Controller
 
     /**
      * Create a Stripe Checkout session for subscription
+     * Supports both authenticated and unauthenticated users
      */
     public function createCheckoutSession(Request $request)
     {
         $user = Auth::user();
 
         try {
-            // Create or retrieve Stripe customer
-            $customerId = $user->stripe_customer_id;
-
-            if (!$customerId) {
-                // Create new customer
-                $customer = Customer::create([
-                    'email' => $user->email,
-                    'name' => $user->name,
-                    'metadata' => [
-                        'user_id' => $user->id,
-                    ],
-                ]);
-
-                // Save customer ID to user
-                $user->update(['stripe_customer_id' => $customer->id]);
-                $customerId = $customer->id;
-            }
-
-            $session = Session::create([
+            $sessionData = [
                 'ui_mode' => 'embedded',
-                'customer' => $customerId,
                 'line_items' => [
                     [
-                        'price' => $request->input('price_id'), // Price ID from Stripe dashboard
+                        'price' => $request->input('price_id'), // Price ID from frontend
                         'quantity' => 1,
                     ],
                 ],
                 'mode' => 'subscription',
                 'return_url' => url('/subscribe/success?session_id={CHECKOUT_SESSION_ID}'),
-                'metadata' => [
+            ];
+
+            // If user is authenticated, link to their account
+            if ($user) {
+                // Create or retrieve Stripe customer
+                $customerId = $user->stripe_customer_id;
+
+                if (!$customerId) {
+                    // Create new customer
+                    $customer = Customer::create([
+                        'email' => $user->email,
+                        'name' => $user->name,
+                        'metadata' => [
+                            'user_id' => $user->id,
+                        ],
+                    ]);
+
+                    // Save customer ID to user
+                    $user->update(['stripe_customer_id' => $customer->id]);
+                    $customerId = $customer->id;
+                }
+
+                $sessionData['customer'] = $customerId;
+                $sessionData['metadata'] = [
                     'user_id' => $user->id,
-                ],
-            ]);
+                ];
+            } else {
+                // For unauthenticated users, Stripe will create a customer automatically
+                // during subscription checkout (no need for customer_creation parameter)
+                // The customer will be created with the email they provide
+            }
+
+            $session = Session::create($sessionData);
 
             return response()->json([
                 'clientSecret' => $session->client_secret,

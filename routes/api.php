@@ -38,6 +38,10 @@ Route::post('/stripe/webhook', [\App\Http\Controllers\Api\StripeWebhookControlle
 // Stripe pricing configuration (public endpoint - unauthenticated users need to see pricing)
 Route::get('/stripe/pricing-config', [\App\Http\Controllers\Api\StripeController::class, 'getPricingConfig']);
 
+// Stripe checkout endpoints (public - support both authenticated and unauthenticated users)
+Route::post('/stripe/create-checkout-session', [\App\Http\Controllers\Api\StripeController::class, 'createCheckoutSession']);
+Route::get('/stripe/session-status', [\App\Http\Controllers\Api\StripeController::class, 'getSessionStatus']);
+
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/resume', [\App\Http\Controllers\Api\UserController::class, 'getResume']);
@@ -77,14 +81,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/automation/process-email-application', [\App\Http\Controllers\Api\JobApplicationController::class, 'processEmailApplication']);
     Route::post('/automation/submit-preferences-and-apply', [\App\Http\Controllers\Api\JobApplicationController::class, 'submitPreferencesAndApply']);
     
-    // Form Preferences protected endpoints  
+    // Form Preferences protected endpoints
     Route::get('/form-preferences', [FormPreferenceController::class, 'getUserPreferences']);
     Route::post('/form-preferences/find', [FormPreferenceController::class, 'findPreference']);
     Route::patch('/form-preferences/confidence', [FormPreferenceController::class, 'updateConfidence']);
-    
-    // Stripe payment endpoints
-    Route::post('/stripe/create-checkout-session', [\App\Http\Controllers\Api\StripeController::class, 'createCheckoutSession']);
-    Route::get('/stripe/session-status', [\App\Http\Controllers\Api\StripeController::class, 'getSessionStatus']);
 
     // Admin routes - Super Admin only
     Route::prefix('admin')->group(function () {
