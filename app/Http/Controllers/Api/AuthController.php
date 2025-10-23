@@ -62,9 +62,13 @@ class AuthController extends Controller
             event(new Registered($user));
             Auth::login($user);
 
+            // Automatically claim any guest uploads from the current session
+            $claimedFiles = $this->transferGuestDataToUser($user);
+
             return response()->json([
                 'message' => 'Registration successful',
-                'user' => $user
+                'user' => $user,
+                'claimed_files' => $claimedFiles
             ], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -78,6 +82,92 @@ class AuthController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Transfer guest session data to newly registered user
+     */
+    protected function transferGuestDataToUser(User $user): array
+    {
+        $movedFiles = [];
+        $userPath = "resumes/{$user->id}";
+        $resumeParserService = app(ResumeParserService::class);
+
+        // Get guest uploads and parsed data from session
+        $guestUploads = session('guest_uploads', []);
+        $guestParsedResume = session('guest_parsed_resume');
+        $sessionId = session()->getId();
+
+        if (!empty($guestUploads)) {
+            foreach ($guestUploads as $uploadInfo) {
+                if (Storage::exists($uploadInfo['path'])) {
+                    $fileName = time() . '_' . $user->id . '_' . $uploadInfo['original_name'];
+                    $newPath = $userPath . '/' . $fileName;
+                    Storage::move($uploadInfo['path'], $newPath);
+
+                    // Create database record
+                    $uploadedFile = UploadedFile::create([
+                        'user_id' => $user->id,
+                        'original_name' => $uploadInfo['original_name'],
+                        'file_path' => $newPath,
+                        'file_type' => 'resume',
+                        'mime_type' => $uploadInfo['type'],
+                        'file_size' => $uploadInfo['size'],
+                        'is_active' => true,
+                    ]);
+
+                    $movedFiles[] = $uploadedFile;
+
+                    // If we have pre-parsed resume data from guest session, save it first (default parsing)
+                    // Then re-parse with OpenAI for full analysis
+                    if ($guestParsedResume && in_array($uploadInfo['type'], ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])) {
+                        try {
+                            Log::info("Saving default-parsed resume data for new user {$user->id}");
+
+                            // First, save the default-parsed data from guest session
+                            $parsedResume = $resumeParserService->saveParsedResumeFromGuestData(
+                                $user->id,
+                                $newPath,
+                                $uploadInfo,
+                                $guestParsedResume
+                            );
+
+                            Log::info("Successfully saved default-parsed resume for user {$user->id}", [
+                                'parsed_resume_id' => $parsedResume->id,
+                                'parsing_method' => 'default'
+                            ]);
+
+                            // Now upgrade to OpenAI parsing for full analysis
+                            try {
+                                Log::info("Upgrading to OpenAI parsing for user {$user->id}");
+                                $resumeParserService->parseResumeFromStorage($newPath, $user->id, $parsedResume);
+                                Log::info("Successfully upgraded resume to OpenAI parsing for user {$user->id}");
+                            } catch (\Exception $aiError) {
+                                Log::error("OpenAI parsing failed (keeping default data): " . $aiError->getMessage());
+                                // Not critical - we still have default parsing
+                            }
+                        } catch (\Exception $e) {
+                            Log::error("Failed to save parsed resume from guest data: " . $e->getMessage());
+                            // Fall back to full OpenAI parsing
+                            try {
+                                $resumeParserService->parseResumeFromStorage($newPath, $user->id);
+                            } catch (\Exception $parseError) {
+                                Log::error("Fallback parsing also failed: " . $parseError->getMessage());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Clean up guest session data
+            $guestPath = "guest-uploads/{$sessionId}";
+            if (Storage::exists($guestPath)) {
+                Storage::deleteDirectory($guestPath);
+            }
+            session()->forget(['guest_uploads', 'guest_parsed_resume', 'guest_matched_jobs']);
+        }
+
+        return $movedFiles;
     }
 
     public function logout(Request $request)

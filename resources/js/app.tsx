@@ -20,14 +20,30 @@ import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { TermsOfService } from "./components/TermsOfService";
 import { Subscribe } from "./components/Subscribe";
 import { SubscribeSuccess } from "./components/SubscribeSuccess";
+import { GuestPreviewModal } from "./components/GuestPreviewModal";
 
 type AppState = 'loading' | 'guest' | 'login' | 'register' | 'authenticated' | 'upload' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms' | 'subscribe' | 'subscribe-success';
+
+interface GuestPreviewData {
+  sessionId: string;
+  matches: any[];
+  totalMatches: number;
+  parsedData?: {
+    name?: string;
+    email?: string;
+    skills_count?: number;
+    experience_years?: number;
+  };
+}
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
   const [isUserAuthenticated, setIsUserAuthenticated] = useState<boolean>(false);
   const [isPrelaunch, setIsPrelaunch] = useState<boolean>(false);
   const [hasBetaAccess, setHasBetaAccess] = useState<boolean>(false);
+  const [guestPreviewData, setGuestPreviewData] = useState<GuestPreviewData | null>(null);
+  const [showGuestPreview, setShowGuestPreview] = useState(false);
+  const [registerInitialValues, setRegisterInitialValues] = useState<{name?: string; email?: string}>({});
 
   // Check authentication status only on initial app load
   useEffect(() => {
@@ -130,7 +146,29 @@ export default function App() {
 
   const handleRegister = async () => {
     setIsUserAuthenticated(true);
-    setAppState('upload');
+
+    // Check if user has a resume (from guest upload transfer)
+    try {
+      const response = await fetch('/api/user/has-resume', {
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+      const data = await response.json();
+
+      if (data.has_resume) {
+        // User has resume (from guest upload), go to dashboard
+        window.location.href = '/dashboard';
+      } else {
+        // User needs to upload resume first
+        setAppState('upload');
+      }
+    } catch (error) {
+      console.error('Failed to check resume status:', error);
+      // Default to upload on error
+      setAppState('upload');
+    }
   };
 
   const handleLogin = async () => {
@@ -225,6 +263,26 @@ export default function App() {
     }
   };
 
+  const handleGuestUploadComplete = (data: GuestPreviewData) => {
+    // Data is already provided from upload response
+    setGuestPreviewData(data);
+    setShowGuestPreview(true);
+  };
+
+  const handleGuestRegister = () => {
+    setShowGuestPreview(false);
+
+    // Extract name and email from guest preview data to autofill registration
+    if (guestPreviewData?.parsedData) {
+      setRegisterInitialValues({
+        name: guestPreviewData.parsedData.name || '',
+        email: guestPreviewData.parsedData.email || ''
+      });
+    }
+
+    handleSwitchToRegister();
+  };
+
   // Loading state
   if (appState === 'loading') {
     return (
@@ -291,7 +349,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col bg-white">
         <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
-        <Register onRegister={handleRegister} onSwitchToLogin={handleSwitchToLogin} />
+        <Register onRegister={handleRegister} onSwitchToLogin={handleSwitchToLogin} initialValues={registerInitialValues} />
       </div>
     );
   }
@@ -327,13 +385,29 @@ export default function App() {
       return (
         <div className="min-h-screen bg-white">
           <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
-          <HeroSection onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
+          <HeroSection
+            onDashboard={handleGoDashboard}
+            isAuthenticated={isUserAuthenticated}
+            onGuestUploadComplete={handleGuestUploadComplete}
+          />
           <ValuePreview />
           <CoreBenefits />
           <HowItWorks />
           <SocialProof />
           <ClosingCTA onSeeMatches={handleSeeMatches} onDashboard={handleGoDashboard} isAuthenticated={isUserAuthenticated} />
           <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
+
+          {/* Guest Preview Modal */}
+          {guestPreviewData && (
+            <GuestPreviewModal
+              isOpen={showGuestPreview}
+              onClose={() => setShowGuestPreview(false)}
+              matches={guestPreviewData.matches}
+              totalMatches={guestPreviewData.totalMatches}
+              parsedData={guestPreviewData.parsedData}
+              onRegister={handleGuestRegister}
+            />
+          )}
         </div>
       );
   }

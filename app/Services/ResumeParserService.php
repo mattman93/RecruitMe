@@ -56,7 +56,7 @@ class ResumeParserService
     /**
      * Parse a resume from an already stored file path.
      */
-    public function parseResumeFromStorage(string $storagePath, int $userId): ParsedResume
+    public function parseResumeFromStorage(string $storagePath, int $userId, ?ParsedResume $existingResume = null): ParsedResume
     {
         if (!Storage::exists($storagePath)) {
             throw new \Exception("File not found: {$storagePath}");
@@ -72,18 +72,64 @@ class ResumeParserService
         // Parse with OpenAI
         $parsedData = $this->parseWithOpenAI($rawText);
 
-        // Create and save the parsed resume
-        $parsedResume = $this->saveParsedResume([
-            'user_id' => $userId,
-            'original_filename' => $fileName,
-            'file_path' => $storagePath,
-            'file_type' => $extension,
-            'file_size' => Storage::size($storagePath),
-            'raw_text' => $rawText,
-            'parsed_data' => $parsedData,
-            'parsing_method' => 'openai',
-            'parsed_at' => now(),
-        ], $parsedData);
+        // Update existing resume or create new one
+        if ($existingResume) {
+            $existingResume->update([
+                'raw_text' => $rawText,
+                'parsed_data' => $parsedData,
+                'parsing_method' => 'openai',
+                'parsed_at' => now(),
+                'full_name' => $parsedData['full_name'] ?? $existingResume->full_name,
+                'email' => $parsedData['email'] ?? $existingResume->email,
+                'phone' => $parsedData['phone'] ?? $existingResume->phone,
+                'linkedin_url' => $parsedData['linkedin_url'] ?? $existingResume->linkedin_url,
+                'github_url' => $parsedData['github_url'] ?? $existingResume->github_url,
+                'portfolio_url' => $parsedData['portfolio_url'] ?? $existingResume->portfolio_url,
+                'location' => $parsedData['location'] ?? $existingResume->location,
+                'professional_summary' => $parsedData['professional_summary'] ?? $existingResume->professional_summary,
+                'objective' => $parsedData['objective'] ?? $existingResume->objective,
+                'work_experience' => $parsedData['work_experience'] ?? [],
+                'education' => $parsedData['education'] ?? [],
+                'technical_skills' => $parsedData['technical_skills'] ?? [],
+                'soft_skills' => $parsedData['soft_skills'] ?? [],
+                'languages' => $parsedData['languages'] ?? [],
+                'certifications' => $parsedData['certifications'] ?? [],
+                'awards' => $parsedData['awards'] ?? [],
+                'projects' => $parsedData['projects'] ?? [],
+                'years_of_experience' => $parsedData['years_of_experience'] ?? $existingResume->years_of_experience,
+                'current_job_title' => $parsedData['current_job_title'] ?? $existingResume->current_job_title,
+                'current_company' => $parsedData['current_company'] ?? $existingResume->current_company,
+                'parsing_confidence' => $parsedData['parsing_confidence'] ?? 0.5,
+            ]);
+            $parsedResume = $existingResume;
+        } else {
+            // Create and save the parsed resume
+            $parsedResume = $this->saveParsedResume([
+                'user_id' => $userId,
+                'original_filename' => $fileName,
+                'file_path' => $storagePath,
+                'file_type' => $extension,
+                'file_size' => Storage::size($storagePath),
+                'raw_text' => $rawText,
+                'parsed_data' => $parsedData,
+                'parsing_method' => 'openai',
+                'parsed_at' => now(),
+            ], $parsedData);
+        }
+
+        // Delete old work experience and save new ones
+        if ($existingResume) {
+            // Find the uploaded file by matching file path
+            $uploadedFile = UploadedFileModel::where('user_id', $userId)
+                ->where('file_path', $storagePath)
+                ->first();
+
+            if ($uploadedFile) {
+                UserWork::where('user_id', $userId)
+                    ->where('uploaded_file_id', $uploadedFile->id)
+                    ->delete();
+            }
+        }
 
         // Save work experience to separate table
         $this->saveWorkExperience($userId, $parsedData['work_experience'] ?? [], $parsedResume);
@@ -276,18 +322,26 @@ class ResumeParserService
                 $errorMessage = $e->getMessage();
                 Log::warning("OpenAI parsing attempt {$attempt} failed: " . $errorMessage);
 
-                // Check if it's a rate limit error
-                if (str_contains($errorMessage, 'rate limit') || str_contains($errorMessage, 'Rate limit')) {
-                    if ($attempt < $maxRetries) {
-                        $delay = $retryDelay * pow(2, $attempt - 1); // Exponential backoff: 1s, 2s, 4s
-                        Log::info("Rate limit hit, waiting {$delay} seconds before retry {$attempt}/{$maxRetries}");
-                        sleep($delay);
-                        continue;
-                    }
+                // Check if it's a rate limit or timeout error - retry both
+                $isRetryable = str_contains($errorMessage, 'rate limit') ||
+                               str_contains($errorMessage, 'Rate limit') ||
+                               str_contains($errorMessage, 'timed out') ||
+                               str_contains($errorMessage, 'timeout') ||
+                               str_contains($errorMessage, 'Operation timed out');
+
+                if ($isRetryable && $attempt < $maxRetries) {
+                    $delay = $retryDelay * pow(2, $attempt - 1); // Exponential backoff: 1s, 2s, 4s
+                    Log::info("Retryable error detected, waiting {$delay} seconds before retry {$attempt}/{$maxRetries}");
+                    sleep($delay);
+                    continue;
                 }
 
-                // For other errors or if we've exhausted retries, fall back
-                Log::error('OpenAI parsing failed after ' . $attempt . ' attempts, using fallback parser');
+                // For non-retryable errors or if we've exhausted retries, fall back
+                if ($attempt >= $maxRetries) {
+                    Log::error('OpenAI parsing failed after all retry attempts, using fallback parser');
+                } else {
+                    Log::error('Non-retryable OpenAI error, using fallback parser');
+                }
                 return $this->fallbackParsing($resumeText);
             }
         }
@@ -540,8 +594,34 @@ PROMPT;
             'current_company' => $parsedData['current_company'] ?? null,
             'parsing_confidence' => $parsedData['parsing_confidence'] ?? 0.5,
         ]);
-        
+
         return ParsedResume::create($resumeData);
+    }
+
+    /**
+     * Save parsed resume from pre-parsed guest data.
+     */
+    public function saveParsedResumeFromGuestData(int $userId, string $filePath, array $fileInfo, array $guestParsedData): ParsedResume
+    {
+        $fileData = [
+            'user_id' => $userId,
+            'original_filename' => $fileInfo['original_name'],
+            'file_path' => $filePath,
+            'file_type' => pathinfo($fileInfo['original_name'], PATHINFO_EXTENSION),
+            'file_size' => $fileInfo['size'],
+            'raw_text' => $guestParsedData['raw_text'] ?? null,
+            'parsed_data' => $guestParsedData,
+            'parsing_method' => 'openai',
+            'parsed_at' => now(),
+        ];
+
+        // Create and save the parsed resume
+        $parsedResume = $this->saveParsedResume($fileData, $guestParsedData);
+
+        // Save work experience to separate table
+        $this->saveWorkExperience($userId, $guestParsedData['work_experience'] ?? [], $parsedResume);
+
+        return $parsedResume;
     }
 
     /**

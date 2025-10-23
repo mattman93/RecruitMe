@@ -10,13 +10,17 @@ import { useScrollAnimation } from "./hooks/useScrollAnimation";
 interface RegisterProps {
   onRegister: () => void;
   onSwitchToLogin: () => void;
+  initialValues?: {
+    name?: string;
+    email?: string;
+  };
 }
 
-export function Register({ onRegister, onSwitchToLogin }: RegisterProps) {
+export function Register({ onRegister, onSwitchToLogin, initialValues }: RegisterProps) {
   const { ref, isVisible } = useScrollAnimation(0.3);
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
+    name: initialValues?.name || "",
+    email: initialValues?.email || "",
     password: "",
     confirmPassword: ""
   });
