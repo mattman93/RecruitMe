@@ -3,10 +3,22 @@
 const { chromium } = require('playwright');
 
 async function fetchJobs(url, headers, payload) {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  let browser;
+
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+  } catch (launchError) {
+    console.error(JSON.stringify({
+      error: true,
+      message: `Failed to launch Chromium: ${launchError.message}`,
+      hint: 'Run: npx playwright install chromium --with-deps',
+      stack: launchError.stack
+    }));
+    process.exit(1);
+  }
 
   try {
     const context = await browser.newContext({
@@ -74,7 +86,9 @@ async function fetchJobs(url, headers, payload) {
       stack: error.stack
     }));
 
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
     process.exit(1);
   }
 }

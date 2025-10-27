@@ -6,16 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\Lead;
 use App\Models\JobSiteStructure;
 use App\Services\JobMatchingService;
+use App\Services\LeadCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class LeadController extends Controller
 {
     protected $jobMatchingService;
+    protected $leadCacheService;
 
-    public function __construct(JobMatchingService $jobMatchingService)
+    public function __construct(JobMatchingService $jobMatchingService, LeadCacheService $leadCacheService)
     {
         $this->jobMatchingService = $jobMatchingService;
+        $this->leadCacheService = $leadCacheService;
     }
 
     public function index(Request $request)
@@ -24,6 +28,25 @@ class LeadController extends Controller
         $matchRelevant = $request->boolean('relevant', false);
         $limit = $request->integer('limit', 20);
 
+        // Try to get from cache if user is authenticated
+        if ($user && $this->leadCacheService->isAvailable()) {
+            $cached = $this->leadCacheService->getLeads($user->id, $matchRelevant, $limit);
+
+            if ($cached !== null) {
+                Log::debug('Leads served from cache', [
+                    'user_id' => $user->id,
+                    'relevant' => $matchRelevant,
+                    'limit' => $limit
+                ]);
+
+                return response()->json(array_merge($cached, [
+                    'cached' => true,
+                    'cache_hit' => true
+                ]));
+            }
+        }
+
+        // Cache miss or cache unavailable - fetch from database
         if ($matchRelevant && $user) {
             // Return AI-matched relevant jobs
             $fetchLimit = $limit * 2;
@@ -35,12 +58,22 @@ class LeadController extends Controller
                 return $job['job_title'] . '|' . $job['company'];
             })->values()->take($limit);
 
-            return response()->json([
+            $response = [
                 'data' => $uniqueJobs,
                 'total' => $uniqueJobs->count(),
                 'matching_strategy' => $leads->first()?->skill_matches ? 'skills-based' : 'experience-based',
                 'user_id' => $user->id,
-            ]);
+            ];
+
+            // Cache the response
+            if ($user && $this->leadCacheService->isAvailable()) {
+                $this->leadCacheService->putLeads($user->id, $response, $matchRelevant, $limit);
+            }
+
+            return response()->json(array_merge($response, [
+                'cached' => false,
+                'cache_hit' => false
+            ]));
         }
 
         // Return all jobs (default behavior)
@@ -57,10 +90,20 @@ class LeadController extends Controller
             return $job['job_title'] . '|' . $job['company'];
         })->values()->take($limit);
 
-        return response()->json([
+        $response = [
             'data' => $uniqueJobs,
             'total' => $uniqueJobs->count(),
-        ]);
+        ];
+
+        // Cache the response for authenticated users
+        if ($user && $this->leadCacheService->isAvailable()) {
+            $this->leadCacheService->putLeads($user->id, $response, $matchRelevant, $limit);
+        }
+
+        return response()->json(array_merge($response, [
+            'cached' => false,
+            'cache_hit' => false
+        ]));
     }
 
     /**
@@ -69,16 +112,34 @@ class LeadController extends Controller
     public function relevant(Request $request)
     {
         $user = Auth::user();
-        
+
         if (!$user) {
             return response()->json([
                 'error' => 'Authentication required'
             ], 401);
         }
 
-        try {
-            $limit = $request->integer('limit', 10);
+        $limit = $request->integer('limit', 10);
 
+        // Try to get from cache
+        if ($this->leadCacheService->isAvailable()) {
+            $cached = $this->leadCacheService->getLeads($user->id, true, $limit);
+
+            if ($cached !== null) {
+                Log::debug('Relevant leads served from cache', [
+                    'user_id' => $user->id,
+                    'limit' => $limit
+                ]);
+
+                return response()->json(array_merge($cached, [
+                    'cached' => true,
+                    'cache_hit' => true
+                ]));
+            }
+        }
+
+        // Cache miss - fetch from database
+        try {
             // Fetch more jobs than needed to account for deduplication
             $fetchLimit = $limit * 2;
             $relevantJobs = $this->jobMatchingService->findRelevantJobs($user->id, $fetchLimit);
@@ -89,7 +150,7 @@ class LeadController extends Controller
                 return $job['job_title'] . '|' . $job['company'];
             })->values()->take($limit);
 
-            return response()->json([
+            $response = [
                 'data' => $uniqueJobs,
                 'total' => $uniqueJobs->count(),
                 'total_potential_matches' => $relevantJobs->total_potential_matches ?? $uniqueJobs->count(),
@@ -97,9 +158,20 @@ class LeadController extends Controller
                 'message' => $relevantJobs->isEmpty()
                     ? 'No relevant jobs found. Try updating your resume or work experience.'
                     : "Found {$uniqueJobs->count()} relevant job matches.",
-            ]);
+            ];
+
+            // Cache the response
+            if ($this->leadCacheService->isAvailable()) {
+                $this->leadCacheService->putLeads($user->id, $response, true, $limit);
+            }
+
+            return response()->json(array_merge($response, [
+                'cached' => false,
+                'cache_hit' => false
+            ]));
+
         } catch (\Exception $e) {
-            \Log::error('Error in relevant jobs endpoint', [
+            Log::error('Error in relevant jobs endpoint', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
@@ -125,6 +197,8 @@ class LeadController extends Controller
                 'total' => $uniqueJobs->count(),
                 'matching_strategy' => 'fallback',
                 'message' => 'Showing all available jobs (relevance matching temporarily unavailable)',
+                'cached' => false,
+                'cache_hit' => false
             ]);
         }
     }
