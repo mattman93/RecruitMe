@@ -75,12 +75,17 @@ RUN composer install --no-dev --optimize-autoloader
 RUN npm install
 
 # Install Playwright Chromium browser (required for job scraping)
-# Install to /var/www/html/.cache so www-data user can access it
+# Create cache directory and set environment before installation
+RUN mkdir -p /var/www/html/.cache
 ENV PLAYWRIGHT_BROWSERS_PATH=/var/www/html/.cache
-RUN npx playwright install chromium --with-deps
 
-# Ensure www-data owns the cache directory
-RUN chown -R www-data:www-data /var/www/html/.cache
+# Install browsers with the environment variable explicitly set
+RUN PLAYWRIGHT_BROWSERS_PATH=/var/www/html/.cache npx playwright install chromium --with-deps
+
+# Ensure www-data owns the cache directory and verify installation
+RUN chown -R www-data:www-data /var/www/html/.cache && \
+    ls -la /var/www/html/.cache/ && \
+    echo "Playwright browsers installed to /var/www/html/.cache/"
 
 # Generate Laravel key (will be overridden by env)
 RUN php artisan key:generate --no-interaction

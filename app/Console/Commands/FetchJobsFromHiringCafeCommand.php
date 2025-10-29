@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\FetchJobsFromHiringCafe;
+use App\Jobs\PlaywrightFetchJobsFromHiringCafe;
 use Illuminate\Console\Command;
 
 class FetchJobsFromHiringCafeCommand extends Command
@@ -19,19 +19,19 @@ class FetchJobsFromHiringCafeCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Fetch jobs from hiring.cafe and store them in the database';
+    protected $description = 'Fetch jobs from hiring.cafe using Playwright (bypasses Vercel security)';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        $this->info('Dispatching FetchJobsFromHiringCafe job...');
-        
-        dispatch(new FetchJobsFromHiringCafe());
-        
-        $this->info('Job dispatched successfully!');
-        
+        $this->info('Dispatching PlaywrightFetchJobsFromHiringCafe job...');
+
+        dispatch(new PlaywrightFetchJobsFromHiringCafe());
+
+        $this->info('Job dispatched successfully! Check logs at storage/logs/hiring_cafe_jobs_playwright.log');
+
         return 0;
     }
 }
