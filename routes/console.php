@@ -30,3 +30,9 @@ Schedule::call(function () {
 Schedule::command('scheduler:monitor')
     ->everyFifteenMinutes()
     ->withoutOverlapping(5);
+
+// Send job match digest emails - runs hourly to check all timezones
+Schedule::job(new \App\Jobs\SendJobMatchDigests)
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->appendOutputTo(storage_path('logs/job_match_digests.log'));

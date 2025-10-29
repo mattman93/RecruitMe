@@ -47,7 +47,7 @@ class JobApplicationController extends Controller
             'data' => $request->all(),
             'user_id' => Auth::id()
         ]);
-        
+
         $validator = Validator::make($request->all(), [
             'lead_ids' => 'required|array',
             'lead_ids.*' => 'required|integer|exists:leads,id',
@@ -61,6 +61,9 @@ class JobApplicationController extends Controller
         }
 
         $user = Auth::user();
+
+        // Track user engagement
+        $user->updateEngagement();
         $leadIds = $request->get('lead_ids');
         $customResponses = $request->get('custom_responses', []);
         $preferredMethod = $request->get('application_method');
@@ -418,7 +421,10 @@ class JobApplicationController extends Controller
             'user_agent' => $request->header('User-Agent'),
             'ip' => $request->ip()
         ]);
-        
+
+        // Track user engagement
+        Auth::user()->updateEngagement();
+
         $validator = Validator::make($request->all(), [
             'job_url' => 'required|url',
             'user_form_data' => 'array'
@@ -672,6 +678,10 @@ class JobApplicationController extends Controller
         }
 
         $user = Auth::user();
+
+        // Track user engagement
+        $user->updateEngagement();
+
         $sessionId = $request->get('session_id');
 
         try {

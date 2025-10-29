@@ -37,7 +37,16 @@ class UserSettingsController extends Controller
             ]
         );
 
-        return response()->json($settings);
+        // Include user-level preferences
+        return response()->json([
+            'settings' => $settings,
+            'user' => [
+                'timezone' => $user->timezone,
+                'match_email_frequency' => $user->match_email_frequency,
+                'last_match_email_sent_at' => $user->last_match_email_sent_at,
+                'match_email_count' => $user->match_email_count,
+            ]
+        ]);
     }
 
     /**
@@ -69,6 +78,8 @@ class UserSettingsController extends Controller
             'max_applications_per_day' => 'integer|min:1|max:100',
             'show_to_recruiters' => 'boolean',
             'hide_from_current_employer' => 'boolean',
+            'timezone' => 'nullable|string|timezone',
+            'match_email_frequency' => 'in:daily,weekly,never',
         ]);
 
         if ($validator->fails()) {
@@ -78,14 +89,29 @@ class UserSettingsController extends Controller
             ], 422);
         }
 
+        // Update UserSettings
+        $settingsData = $request->except(['timezone', 'match_email_frequency']);
         $settings = UserSettings::updateOrCreate(
             ['user_id' => $user->id],
-            $request->all()
+            $settingsData
         );
+
+        // Update User model for timezone and email preferences
+        if ($request->has('timezone')) {
+            $user->timezone = $request->timezone;
+        }
+        if ($request->has('match_email_frequency')) {
+            $user->match_email_frequency = $request->match_email_frequency;
+        }
+        $user->save();
 
         return response()->json([
             'success' => true,
-            'settings' => $settings
+            'settings' => $settings,
+            'user' => [
+                'timezone' => $user->timezone,
+                'match_email_frequency' => $user->match_email_frequency,
+            ]
         ]);
     }
 }

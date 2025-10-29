@@ -82,6 +82,8 @@ export function Dashboard() {
   const [maxApplicationsPerDay, setMaxApplicationsPerDay] = useState(10);
   const [showToRecruiters, setShowToRecruiters] = useState(true);
   const [hideFromCurrentEmployer, setHideFromCurrentEmployer] = useState(false);
+  const [timezone, setTimezone] = useState('America/New_York');
+  const [matchEmailFrequency, setMatchEmailFrequency] = useState<'daily' | 'weekly' | 'never'>('weekly');
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -352,7 +354,9 @@ const fetchOAuthStatus = async () => {
       });
 
       if (response.ok) {
-        const settings = await response.json();
+        const data = await response.json();
+        const settings = data.settings || data; // Handle both new and old response formats
+        const user = data.user || {};
 
         // Update all settings state
         setNotifyNewMatches(settings.notify_new_matches ?? true);
@@ -370,6 +374,10 @@ const fetchOAuthStatus = async () => {
         setMaxApplicationsPerDay(settings.max_applications_per_day ?? 10);
         setShowToRecruiters(settings.show_to_recruiters ?? true);
         setHideFromCurrentEmployer(settings.hide_from_current_employer ?? false);
+
+        // Update user-level preferences
+        setTimezone(user.timezone ?? 'America/New_York');
+        setMatchEmailFrequency(user.match_email_frequency ?? 'weekly');
       }
     } catch (error) {
       console.error('Error fetching user settings:', error);
@@ -398,6 +406,8 @@ const fetchOAuthStatus = async () => {
         max_applications_per_day: maxApplicationsPerDay,
         show_to_recruiters: showToRecruiters,
         hide_from_current_employer: hideFromCurrentEmployer,
+        timezone: timezone,
+        match_email_frequency: matchEmailFrequency,
       };
 
       // Fetch CSRF token
@@ -757,6 +767,45 @@ const fetchOAuthStatus = async () => {
                     checked={notifyApplicationUpdates}
                     onCheckedChange={setNotifyApplicationUpdates}
                   />
+                </div>
+
+                <div className="pt-4 border-t">
+                  <Label htmlFor="match-email-frequency" className="text-sm font-medium">Match Email Digest</Label>
+                  <p className="text-sm text-muted-foreground mb-3">How often should we send you job match summaries?</p>
+                  <select
+                    id="match-email-frequency"
+                    value={matchEmailFrequency}
+                    onChange={(e) => setMatchEmailFrequency(e.target.value as 'daily' | 'weekly' | 'never')}
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="daily">Daily (best for active job seekers)</option>
+                    <option value="weekly">Weekly (recommended)</option>
+                    <option value="never">Never</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label htmlFor="timezone" className="text-sm font-medium">Timezone</Label>
+                  <p className="text-sm text-muted-foreground mb-3">Emails will be sent at 8am in your timezone</p>
+                  <select
+                    id="timezone"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="America/New_York">Eastern Time (ET)</option>
+                    <option value="America/Chicago">Central Time (CT)</option>
+                    <option value="America/Denver">Mountain Time (MT)</option>
+                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                    <option value="America/Anchorage">Alaska Time (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                    <option value="Europe/London">London (GMT)</option>
+                    <option value="Europe/Paris">Central European Time (CET)</option>
+                    <option value="Asia/Tokyo">Tokyo (JST)</option>
+                    <option value="Asia/Shanghai">China (CST)</option>
+                    <option value="Asia/Dubai">Dubai (GST)</option>
+                    <option value="Australia/Sydney">Sydney (AEDT)</option>
+                  </select>
                 </div>
               </div>
             </Card>

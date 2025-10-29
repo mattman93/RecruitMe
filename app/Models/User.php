@@ -31,6 +31,11 @@ class User extends Authenticatable
         'subscription_status',
         'subscription_plan',
         'subscription_ends_at',
+        'timezone',
+        'match_email_frequency',
+        'last_match_email_sent_at',
+        'match_email_count',
+        'last_engagement_at',
     ];
 
     // User role constants
@@ -59,6 +64,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'subscription_ends_at' => 'datetime',
+            'last_match_email_sent_at' => 'datetime',
+            'last_engagement_at' => 'datetime',
         ];
     }
 
@@ -188,5 +195,89 @@ class User extends Authenticatable
     public function hasUnlimitedCredits(): bool
     {
         return $this->hasSubscription();
+    }
+
+    /**
+     * Check if user should receive a match email based on their preferences and last send time
+     */
+    public function shouldReceiveMatchEmail(): bool
+    {
+        // Never send if preference is set to never
+        if ($this->match_email_frequency === 'never') {
+            return false;
+        }
+
+        // If never sent before, send now
+        if (!$this->last_match_email_sent_at) {
+            return true;
+        }
+
+        $hoursSinceLastEmail = $this->last_match_email_sent_at->diffInHours(now());
+
+        // For daily frequency, send if 24+ hours have passed
+        if ($this->match_email_frequency === 'daily') {
+            return $hoursSinceLastEmail >= 24;
+        }
+
+        // For weekly frequency, send if 7 days have passed
+        if ($this->match_email_frequency === 'weekly') {
+            $daysSinceLastEmail = $this->last_match_email_sent_at->diffInDays(now());
+            return $daysSinceLastEmail >= 7;
+        }
+
+        return false;
+    }
+
+    /**
+     * Update last engagement timestamp
+     */
+    public function updateEngagement(): void
+    {
+        $this->update(['last_engagement_at' => now()]);
+    }
+
+    /**
+     * Check if user is actively engaged (within last 7 days)
+     */
+    public function isActivelyEngaged(): bool
+    {
+        if (!$this->last_engagement_at) {
+            return false;
+        }
+
+        return $this->last_engagement_at->diffInDays(now()) <= 7;
+    }
+
+    /**
+     * Get engagement level for recommended actions
+     */
+    public function getEngagementLevel(): string
+    {
+        if (!$this->last_engagement_at) {
+            return 'new'; // New user, no engagement yet
+        }
+
+        $daysSinceEngagement = $this->last_engagement_at->diffInDays(now());
+
+        if ($daysSinceEngagement <= 1) {
+            return 'high'; // Very active
+        } elseif ($daysSinceEngagement <= 7) {
+            return 'medium'; // Active
+        } elseif ($daysSinceEngagement <= 30) {
+            return 'low'; // Declining
+        } else {
+            return 'dormant'; // Inactive
+        }
+    }
+
+    /**
+     * Record that a match email was sent
+     */
+    public function recordMatchEmailSent(): void
+    {
+        $this->update([
+            'last_match_email_sent_at' => now(),
+            'match_email_count' => $this->match_email_count + 1,
+        ]);
     }
 }
