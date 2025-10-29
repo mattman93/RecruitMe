@@ -24,6 +24,9 @@ RUN apt-get install -y \
 # Install PHP extensions
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
+# Install Redis extension
+RUN pecl install redis && docker-php-ext-enable redis
+
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
@@ -31,7 +34,25 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# Playwright dependencies removed for simplified build
+# Install Playwright system dependencies for Chromium
+RUN apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0
 
 # Copy existing application directory contents
 COPY . /var/www/html
@@ -50,8 +71,16 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Install Node.js dependencies (Playwright browsers removed)
+# Install Node.js dependencies and Playwright Chromium
 RUN npm install
+
+# Install Playwright Chromium browser (required for job scraping)
+# Install to /var/www/html/.cache so www-data user can access it
+ENV PLAYWRIGHT_BROWSERS_PATH=/var/www/html/.cache
+RUN npx playwright install chromium --with-deps
+
+# Ensure www-data owns the cache directory
+RUN chown -R www-data:www-data /var/www/html/.cache
 
 # Generate Laravel key (will be overridden by env)
 RUN php artisan key:generate --no-interaction

@@ -123,11 +123,11 @@ class MonitorSchedulerHealth extends Command
     private function runMissedJobs(): void
     {
         $this->info('🔄 Running missed jobs...');
-        
+
         // Dispatch the job immediately
-        \App\Jobs\FetchJobsFromHiringCafe::dispatch();
-        
-        Log::info('Dispatched missed FetchJobsFromHiringCafe job');
+        \App\Jobs\PlaywrightFetchJobsFromHiringCafe::dispatch();
+
+        Log::info('Dispatched missed PlaywrightFetchJobsFromHiringCafe job');
         $this->info('✅ Missed job dispatched');
     }
     

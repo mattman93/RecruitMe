@@ -217,8 +217,9 @@ class PlaywrightFetchJobsFromHiringCafe implements ShouldQueue
         $headersJson = escapeshellarg(json_encode($headers));
         $payloadJson = escapeshellarg(json_encode($payload));
 
-        // Execute the Node.js script
-        $command = "node {$scriptPath} {$url} {$headersJson} {$payloadJson} 2>&1";
+        // Set Playwright browsers path to accessible location for www-data user
+        $browsersPath = base_path('.cache');
+        $command = "PLAYWRIGHT_BROWSERS_PATH={$browsersPath} node {$scriptPath} {$url} {$headersJson} {$payloadJson} 2>&1";
 
         Log::info("Executing Playwright script");
 

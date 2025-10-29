@@ -165,38 +165,80 @@ class FetchJobsFromHiringCafe implements ShouldQueue
 private function fetchJobsBatch(int $page, int $size): bool
     {
         $payload = $this->buildRequestPayload($page, $size);
-        
+
         Log::info("Fetching jobs batch - Page: {$page}, Size: {$size}");
 
-        $response = Http::withHeaders($this->dataSource->headers)
-            ->timeout(30)
-            ->post($this->dataSource->url, $payload);
+        // Use Playwright script to bypass bot detection
+        $scriptPath = base_path('scripts/fetch-hiring-cafe.js');
+        $headersJson = escapeshellarg(json_encode($this->dataSource->headers));
+        $payloadJson = escapeshellarg(json_encode($payload));
+        $url = escapeshellarg($this->dataSource->url);
 
-        // Handle 4xx/5xx responses immediately
-        if ($response->status() >= 400) {
-            $errorMessage = "HTTP {$response->status()} error from hiring.cafe API";
-            Log::error($errorMessage . ': ' . $response->body());
-            $this->sendErrorEmail('API Error - Potential IP Block', $errorMessage);
-            
-            // Stop the job immediately on client/server errors
+        // Set Playwright browsers path to accessible location for www-data user
+        $browsersPath = base_path('.cache');
+        $command = "PLAYWRIGHT_BROWSERS_PATH={$browsersPath} node {$scriptPath} {$url} {$headersJson} {$payloadJson} 2>&1";
+
+        Log::info("Executing Playwright script: {$command}");
+
+        $output = shell_exec($command);
+
+        if ($output === null) {
+            $errorMessage = "Failed to execute Playwright script";
+            Log::error($errorMessage);
+            $this->sendErrorEmail('Script Execution Error', $errorMessage);
             throw new \Exception($errorMessage);
         }
 
-        if (!$response->successful()) {
+        Log::info("Playwright script output: " . substr($output, 0, 500));
+
+        $result = json_decode($output, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $errorMessage = "Failed to parse Playwright script output: " . json_last_error_msg();
+            Log::error($errorMessage . " - Output: " . substr($output, 0, 1000));
+            $this->sendErrorEmail('Script Output Parse Error', $errorMessage);
+            throw new \Exception($errorMessage);
+        }
+
+        // Check for script errors
+        if (isset($result['error']) && $result['error'] === true) {
+            $errorMessage = "Playwright script error: " . ($result['message'] ?? 'Unknown error');
+            Log::error($errorMessage);
+
+            // Check if it's a Chromium installation issue
+            if (strpos($result['message'] ?? '', 'Failed to launch Chromium') !== false) {
+                $this->sendErrorEmail('Chromium Not Installed', $errorMessage . "\n\nRun: npx playwright install chromium --with-deps");
+            } else {
+                $this->sendErrorEmail('Script Error', $errorMessage);
+            }
+
+            throw new \Exception($errorMessage);
+        }
+
+        // Handle HTTP errors from the API
+        if (isset($result['status']) && $result['status'] >= 400) {
+            $errorMessage = "HTTP {$result['status']} error from hiring.cafe API";
+            Log::error($errorMessage . ': ' . json_encode($result['data'] ?? []));
+            $this->sendErrorEmail('API Error - Potential IP Block', $errorMessage);
+            throw new \Exception($errorMessage);
+        }
+
+        // Check for successful response
+        if (!isset($result['data'])) {
             $this->errorsEncountered++;
-            Log::warning("API request failed with status: {$response->status()}");
+            Log::warning("No data in response");
             return false;
         }
 
-        $data = $response->json();
-        
+        $data = $result['data'];
+
         // Save raw response as JSON file
         $this->saveRawResponse($data, $page);
 
         // Process and store jobs
         if (isset($data['results']) && is_array($data['results'])) {
             $this->processJobs($data['results']);
-            
+
             // Check if there are more pages
             return count($data['results']) >= $size;
         }

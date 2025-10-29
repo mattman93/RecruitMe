@@ -15,11 +15,14 @@ services:
       - DB_DATABASE=recruit_me
       - DB_USERNAME=laravel
       - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - .:/var/www/html
       - ./docker/php.ini:/usr/local/etc/php/php.ini
     depends_on:
       - db
+      - redis
     networks:
       - recruit-me-network
 
@@ -39,6 +42,18 @@ services:
     networks:
       - recruit-me-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: recruit-me-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - recruit-me-network
+    command: redis-server --appendonly yes
+
   migrate:
     build: .
     container_name: recruit-me-migrate
@@ -54,6 +69,7 @@ services:
 
 volumes:
   mysql_data:
+  redis_data:
 
 networks:
   recruit-me-network:

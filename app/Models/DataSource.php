@@ -63,8 +63,8 @@ class DataSource extends Model
             return true;
         }
 
-        $hoursSinceLastFetch = $this->last_fetched_at->diffInHours(now());
-        return $hoursSinceLastFetch >= 1; // Simple hourly check
+        $minutesSinceLastFetch = $this->last_fetched_at->diffInMinutes(now());
+        return $minutesSinceLastFetch >= 60; // At least 60 minutes between fetches
     }
 
     /**
