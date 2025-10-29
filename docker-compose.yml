@@ -17,6 +17,7 @@ services:
       - DB_PASSWORD=secret
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
     volumes:
       - .:/var/www/html
       - ./docker/php.ini:/usr/local/etc/php/php.ini

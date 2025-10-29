@@ -59,3 +59,6 @@ clear_*.php
 submit_*.php
 get_*.php
 complete_*.json
+.DS_Store
+*DS_Store
+sendgrid.env
