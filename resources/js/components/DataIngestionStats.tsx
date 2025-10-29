@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { CheckCircle, XCircle, Clock, TrendingUp, Database, AlertTriangle } from 'lucide-react';
 
 interface SchedulerRun {
@@ -151,13 +150,13 @@ export function DataIngestionStats() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'success':
-        return <Badge className="bg-green-600 text-white"><CheckCircle className="h-3 w-3 mr-1" />Success</Badge>;
+        return <span className="flex items-center font-medium" style={{ color: '#16a34a' }}><CheckCircle className="h-3 w-3 mr-1" />Success</span>;
       case 'failed':
-        return <Badge className="bg-red-600 text-white"><XCircle className="h-3 w-3 mr-1" />Failed</Badge>;
+        return <span className="flex items-center font-medium" style={{ color: '#dc2626' }}><XCircle className="h-3 w-3 mr-1" />Failed</span>;
       case 'rate_limited':
-        return <Badge className="bg-yellow-600 text-white"><Clock className="h-3 w-3 mr-1" />Rate Limited</Badge>;
+        return <span className="flex items-center font-medium" style={{ color: '#f97316' }}><Clock className="h-3 w-3 mr-1" />Rate Limited</span>;
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return <span style={{ color: '#6b7280' }}>{status}</span>;
     }
   };
 
@@ -330,7 +329,7 @@ export function DataIngestionStats() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(run.created_at)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {getStatusBadge(run.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
