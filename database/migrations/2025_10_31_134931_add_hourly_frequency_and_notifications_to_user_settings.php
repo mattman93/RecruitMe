@@ -11,13 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Add notification_frequency field
-        Schema::table('user_settings', function (Blueprint $table) {
-            $table->enum('notification_frequency', ['realtime', 'daily', 'weekly', 'none'])
-                ->default('daily')
-                ->after('auto_apply_relevance');
-            $table->integer('max_applications_per_day')->default(25)->after('notification_frequency');
-        });
+        // Add notification_frequency field if it doesn't exist
+        if (!Schema::hasColumn('user_settings', 'notification_frequency')) {
+            Schema::table('user_settings', function (Blueprint $table) {
+                $table->enum('notification_frequency', ['realtime', 'daily', 'weekly', 'none'])
+                    ->default('daily')
+                    ->after('auto_apply_relevance');
+            });
+        }
+
+        // Add max_applications_per_day field if it doesn't exist
+        if (!Schema::hasColumn('user_settings', 'max_applications_per_day')) {
+            Schema::table('user_settings', function (Blueprint $table) {
+                $table->integer('max_applications_per_day')->default(25)->after('notification_frequency');
+            });
+        }
 
         // Alter auto_apply_frequency enum to include 'hourly'
         DB::statement("ALTER TABLE user_settings MODIFY COLUMN auto_apply_frequency ENUM('hourly', 'daily', 'weekly') DEFAULT 'hourly'");
