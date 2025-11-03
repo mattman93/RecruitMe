@@ -77,13 +77,16 @@ export function Dashboard() {
   const [employmentTypes, setEmploymentTypes] = useState({ fullTime: true, contract: false, partTime: false });
   const [workArrangement, setWorkArrangement] = useState({ remote: true, hybrid: true, onsite: false });
   const [willingToRelocate, setWillingToRelocate] = useState(false);
-  const [queueAutoApply, setQueueAutoApply] = useState(false);
-  const [autonomousAutoApply, setAutonomousAutoApply] = useState(false);
   const [maxApplicationsPerDay, setMaxApplicationsPerDay] = useState(10);
   const [showToRecruiters, setShowToRecruiters] = useState(true);
   const [hideFromCurrentEmployer, setHideFromCurrentEmployer] = useState(false);
   const [timezone, setTimezone] = useState('America/New_York');
   const [matchEmailFrequency, setMatchEmailFrequency] = useState<'daily' | 'weekly' | 'never'>('weekly');
+  const [autoApplyEnabled, setAutoApplyEnabled] = useState(false);
+  const [autoApplyFrequency, setAutoApplyFrequency] = useState<'hourly' | 'daily' | 'weekly'>('hourly');
+  const [autoApplyMaxPerPeriod, setAutoApplyMaxPerPeriod] = useState(10);
+  const [autoApplyRelevance, setAutoApplyRelevance] = useState<'high' | 'medium' | 'broad'>('high');
+  const [notificationFrequency, setNotificationFrequency] = useState<'realtime' | 'daily' | 'weekly' | 'none'>('daily');
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -91,6 +94,7 @@ export function Dashboard() {
   const [userName, setUserName] = useState('');
   const [userCredits, setUserCredits] = useState(0);
   const [hasSubscription, setHasSubscription] = useState(false);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | null>(null);
 
   const itemsPerPage = 10;
   useEffect(() => {
@@ -99,6 +103,7 @@ export function Dashboard() {
     fetchUserInfo();
     fetchOAuthStatus();
     fetchUserApplications();
+    fetchAccountInfo();
   }, []);
 
   // Fetch settings when settings tab is opened
@@ -230,6 +235,7 @@ const fetchAccountInfo = async () => {
       const data = await response.json();
       setUserCredits(data.credits || 0);
       setHasSubscription(data.has_subscription || false);
+      setSubscriptionPlan(data.subscription_plan || null);
     }
   } catch (error) {
     console.error('Error fetching account info:', error);
@@ -369,11 +375,16 @@ const fetchOAuthStatus = async () => {
         setEmploymentTypes(settings.employment_types ?? { fullTime: true, contract: false, partTime: false });
         setWorkArrangement(settings.work_arrangement ?? { remote: true, hybrid: true, onsite: false });
         setWillingToRelocate(settings.willing_to_relocate ?? false);
-        setQueueAutoApply(settings.queue_auto_apply ?? false);
-        setAutonomousAutoApply(settings.autonomous_auto_apply ?? false);
         setMaxApplicationsPerDay(settings.max_applications_per_day ?? 10);
         setShowToRecruiters(settings.show_to_recruiters ?? true);
         setHideFromCurrentEmployer(settings.hide_from_current_employer ?? false);
+
+        // Auto-apply settings
+        setAutoApplyEnabled(settings.auto_apply_enabled ?? false);
+        setAutoApplyFrequency(settings.auto_apply_frequency ?? 'hourly');
+        setAutoApplyMaxPerPeriod(settings.auto_apply_max_per_period ?? 10);
+        setAutoApplyRelevance(settings.auto_apply_relevance ?? 'high');
+        setNotificationFrequency(settings.notification_frequency ?? 'daily');
 
         // Update user-level preferences
         setTimezone(user.timezone ?? 'America/New_York');
@@ -401,11 +412,14 @@ const fetchOAuthStatus = async () => {
         employment_types: employmentTypes,
         work_arrangement: workArrangement,
         willing_to_relocate: willingToRelocate,
-        queue_auto_apply: queueAutoApply,
-        autonomous_auto_apply: autonomousAutoApply,
         max_applications_per_day: maxApplicationsPerDay,
         show_to_recruiters: showToRecruiters,
         hide_from_current_employer: hideFromCurrentEmployer,
+        auto_apply_enabled: autoApplyEnabled,
+        auto_apply_frequency: autoApplyFrequency,
+        auto_apply_max_per_period: autoApplyMaxPerPeriod,
+        auto_apply_relevance: autoApplyRelevance,
+        notification_frequency: notificationFrequency,
         timezone: timezone,
         match_email_frequency: matchEmailFrequency,
       };
@@ -571,6 +585,29 @@ const fetchOAuthStatus = async () => {
           {/* Main Content Grid */}
           {/* Dashboard Content */}
         {activeTab === 'matches' && (
+          <>
+          {/* Upgrade Banner for non-Pro users */}
+          {hasSubscription && subscriptionPlan !== 'pro' && (
+            <div
+              className="mb-6 p-3 rounded-lg border text-center"
+              style={{
+                backgroundColor: '#fffbeb',
+                borderColor: '#fcd34d'
+              }}
+            >
+              <p className="text-sm" style={{ color: '#78350f' }}>
+                Enable Auto-Apply and let AppliFlow automatically submit applications to high-quality jobs that match your profile.{' '}
+                <a
+                  href="/subscribe"
+                  className="font-semibold underline"
+                  style={{ color: '#b45309' }}
+                >
+                  Upgrade to Pro
+                </a>
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-6 fade-in fade-in-delay-1 visible">
             {/* Left Column - Resume Preview */}
             <div className="sticky top-8 self-start space-y-6 flex-shrink-0" style={{ width: '35%' }}>
@@ -636,6 +673,7 @@ const fetchOAuthStatus = async () => {
               <JobQueue userEmail={userEmail} hasGmailOAuth={hasGmailOAuth} />
             </div>
           </div>
+          </>
         )}
         
         {/* Your Applications Tab */}
@@ -991,28 +1029,6 @@ const fetchOAuthStatus = async () => {
             <Card className="p-6">
               <h3 className="font-semibold text-foreground mb-4">Application Settings</h3>
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <Label htmlFor="queue-auto-apply" className="text-sm font-medium">Queue auto-apply</Label>
-                    <p className="text-sm text-muted-foreground">Automatically apply to jobs in your queue</p>
-                  </div>
-                  <Switch
-                    id="queue-auto-apply"
-                    checked={queueAutoApply}
-                    onCheckedChange={setQueueAutoApply}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <Label htmlFor="autonomous-auto-apply" className="text-sm font-medium">Autonomous auto-apply</Label>
-                    <p className="text-sm text-muted-foreground">Automatically apply to new matches without review</p>
-                  </div>
-                  <Switch
-                    id="autonomous-auto-apply"
-                    checked={autonomousAutoApply}
-                    onCheckedChange={setAutonomousAutoApply}
-                  />
-                </div>
                 <div>
                   <Label htmlFor="max-apps" className="text-sm font-medium">Max applications per day</Label>
                   <p className="text-sm text-muted-foreground mb-2">Limit daily applications to avoid spam</p>
@@ -1026,6 +1042,150 @@ const fetchOAuthStatus = async () => {
                   />
                 </div>
               </div>
+            </Card>
+
+            {/* Auto-Apply Settings (Premium Feature) */}
+            <Card className="p-6">
+              <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                <BriefcaseIcon size={20} />
+                Auto-Apply
+                <Badge
+                  style={{
+                    backgroundImage: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    color: 'white',
+                    fontSize: '10px',
+                    padding: '2px 8px'
+                  }}
+                  className="border-transparent font-semibold"
+                >
+                  PRO
+                </Badge>
+              </h3>
+
+              {subscriptionPlan === 'pro' ? (
+                <>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Automatically apply to jobs that match your criteria
+                  </p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <Label htmlFor="auto-apply-enabled" className="text-sm font-medium">Enable Auto-Apply</Label>
+                        <p className="text-sm text-muted-foreground">Let AppliFlow apply to jobs on your behalf</p>
+                      </div>
+                      <Switch
+                        id="auto-apply-enabled"
+                        checked={autoApplyEnabled}
+                        onCheckedChange={setAutoApplyEnabled}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="auto-apply-frequency" className="text-sm font-medium">Application Frequency</Label>
+                      <p className="text-sm text-muted-foreground mb-2">How often should we apply to jobs?</p>
+                      <select
+                        id="auto-apply-frequency"
+                        value={autoApplyFrequency}
+                        onChange={(e) => setAutoApplyFrequency(e.target.value as 'hourly' | 'daily' | 'weekly')}
+                        className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="hourly">Hourly (2-3 apps/hour, 8am-7pm, max 25/day)</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="auto-apply-max" className="text-sm font-medium">
+                        Max Per Batch
+                      </Label>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Maximum applications per {autoApplyFrequency === 'daily' ? 'day' : 'week'}
+                      </p>
+                      <Input
+                        id="auto-apply-max"
+                        type="number"
+                        min="1"
+                        max="25"
+                        value={autoApplyMaxPerPeriod}
+                        onChange={(e) => setAutoApplyMaxPerPeriod(Math.min(25, Math.max(1, parseInt(e.target.value) || 1)))}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="auto-apply-relevance" className="text-sm font-medium">Relevance Threshold</Label>
+                      <p className="text-sm text-muted-foreground mb-2">Only apply to jobs with this relevance or higher</p>
+                      <select
+                        id="auto-apply-relevance"
+                        value={autoApplyRelevance}
+                        onChange={(e) => setAutoApplyRelevance(e.target.value as 'high' | 'medium' | 'broad')}
+                        className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="high">High (80%+)</option>
+                        <option value="medium">Medium (60%+)</option>
+                        <option value="broad">Broad (40%+)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="notification-frequency" className="text-sm font-medium">Notification Frequency</Label>
+                      <p className="text-sm text-muted-foreground mb-2">How often should we notify you about applications?</p>
+                      <select
+                        id="notification-frequency"
+                        value={notificationFrequency}
+                        onChange={(e) => setNotificationFrequency(e.target.value as 'realtime' | 'daily' | 'weekly' | 'none')}
+                        className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="realtime">Real-time (email after each application)</option>
+                        <option value="daily">Daily digest (1 email/day with all applications)</option>
+                        <option value="weekly">Weekly digest (1 email/week with summary)</option>
+                        <option value="none">In-app only (no emails, check dashboard)</option>
+                      </select>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div
+                    className="p-6 rounded-lg border-2 border-amber-400"
+                    style={{
+                      backgroundImage: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+                    }}
+                  >
+                    <Lock className="h-8 w-8 text-amber-700 mb-3" />
+                    <h4 className="text-lg font-semibold text-amber-900 mb-2">
+                      Unlock Auto-Apply with Pro
+                    </h4>
+                    <p className="text-amber-800 text-sm mb-4">
+                      Upgrade to Pro to automatically apply to relevant jobs while you sleep. Set your preferences once and let AppliFlow handle the rest.
+                    </p>
+                    <ul className="space-y-2 mb-4 text-amber-800 text-sm">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-amber-700 mt-0.5 flex-shrink-0" />
+                        <span>Automatically apply to 1-25 jobs per day or week</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-amber-700 mt-0.5 flex-shrink-0" />
+                        <span>Filter by relevance score to target the best matches</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-amber-700 mt-0.5 flex-shrink-0" />
+                        <span>Save hours of manual application work every week</span>
+                      </li>
+                    </ul>
+                    <Button
+                      className="w-full font-semibold"
+                      style={{
+                        backgroundImage: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: 'white',
+                      }}
+                      onClick={() => window.location.href = '/subscribe'}
+                    >
+                      Upgrade to Pro
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Card>
 
             {/* Privacy Settings */}
@@ -1105,11 +1265,19 @@ const fetchOAuthStatus = async () => {
                         <Label className="text-sm font-medium">Account Status</Label>
                         <div className="mt-1">
                           <Badge
-                            style={hasSubscription ? { backgroundColor: '#8B5CF6', color: 'white' } : undefined}
+                            style={hasSubscription ? {
+                              backgroundImage: subscriptionPlan === 'pro'
+                                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                                : 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
+                              color: 'white',
+                              boxShadow: subscriptionPlan === 'pro'
+                                ? '0 2px 8px rgba(245, 158, 11, 0.3)'
+                                : '0 2px 8px rgba(139, 92, 246, 0.3)'
+                            } : undefined}
                             variant={hasSubscription ? undefined : "secondary"}
                             className={hasSubscription ? "border-transparent" : ""}
                           >
-                            {hasSubscription ? "Subscribed" : "Unsubscribed"}
+                            {hasSubscription ? (subscriptionPlan === 'pro' ? 'Pro Tier' : 'Starter Tier') : "Unsubscribed"}
                           </Badge>
                         </div>
                       </div>
@@ -1129,7 +1297,7 @@ const fetchOAuthStatus = async () => {
                             )}
                           </div>
                           {!hasSubscription && (
-                            <a href="#pricing" className="text-sm text-primary hover:underline mt-2 inline-block">
+                            <a href="/subscribe" className="text-sm text-primary hover:underline mt-2 inline-block">
                               Get More Tokens
                             </a>
                           )}

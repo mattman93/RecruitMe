@@ -21,9 +21,14 @@ class UserSettings extends Model
         'willing_to_relocate',
         'queue_auto_apply',
         'autonomous_auto_apply',
-        'max_applications_per_day',
         'show_to_recruiters',
         'hide_from_current_employer',
+        'auto_apply_enabled',
+        'auto_apply_frequency',
+        'auto_apply_max_per_period',
+        'auto_apply_relevance',
+        'notification_frequency',
+        'max_applications_per_day',
     ];
 
     protected $casts = [

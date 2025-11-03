@@ -36,3 +36,31 @@ Schedule::job(new \App\Jobs\SendJobMatchDigests)
     ->hourly()
     ->withoutOverlapping(30)
     ->appendOutputTo(storage_path('logs/job_match_digests.log'));
+
+// Process auto-apply for Pro users - runs hourly and checks each user's frequency settings
+Schedule::job(new \App\Jobs\ProcessAutoApply)
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->appendOutputTo(storage_path('logs/auto_apply.log'));
+
+// Send daily auto-apply digest - runs at 7pm daily
+Schedule::job(new \App\Jobs\SendAutoApplyDigest('daily'))
+    ->dailyAt('19:00')
+    ->appendOutputTo(storage_path('logs/auto_apply_digest.log'));
+
+// Send weekly auto-apply digest - runs Sundays at 7pm
+Schedule::job(new \App\Jobs\SendAutoApplyDigest('weekly'))
+    ->weeklyOn(0, '19:00') // 0 = Sunday
+    ->appendOutputTo(storage_path('logs/auto_apply_digest.log'));
+
+// Sync leads from local to production - runs hourly (LOCAL ONLY)
+Schedule::command('leads:sync-to-production --hours=1')
+    ->hourly()
+    ->when(fn() => !app()->environment('production'))
+    ->appendOutputTo(storage_path('logs/lead_sync.log'));
+
+// Import leads from latest export - runs every 15 minutes (PRODUCTION ONLY)
+Schedule::job(new \App\Jobs\ImportLeadsFromLatestExport)
+    ->everyFifteenMinutes()
+    ->when(fn() => app()->environment('production'))
+    ->appendOutputTo(storage_path('logs/lead_import.log'));

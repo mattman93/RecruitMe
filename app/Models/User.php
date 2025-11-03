@@ -36,6 +36,9 @@ class User extends Authenticatable
         'last_match_email_sent_at',
         'match_email_count',
         'last_engagement_at',
+        'last_auto_apply_at',
+        'daily_applications_count',
+        'last_daily_reset_at',
     ];
 
     // User role constants
@@ -66,6 +69,8 @@ class User extends Authenticatable
             'subscription_ends_at' => 'datetime',
             'last_match_email_sent_at' => 'datetime',
             'last_engagement_at' => 'datetime',
+            'last_auto_apply_at' => 'datetime',
+            'last_daily_reset_at' => 'datetime',
         ];
     }
 

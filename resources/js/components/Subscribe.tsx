@@ -19,6 +19,13 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   const [pricingConfig, setPricingConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPlan, setCurrentPlan] = useState<'starter' | 'pro' | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [subscriptionChangeDetails, setSubscriptionChangeDetails] = useState<{
+    type: 'upgrade' | 'downgrade';
+    plan: string;
+    features: string[];
+  } | null>(null);
 
   console.log('Subscribe component - isAuthenticated:', isAuthenticated);
 
@@ -68,30 +75,129 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
     fetchPricingConfig();
   }, []);
 
+  // Fetch user's current subscription plan if authenticated
+  useEffect(() => {
+    const fetchUserPlan = async () => {
+      if (!isAuthenticated) return;
+
+      try {
+        const response = await fetch('/api/user/credits', {
+          credentials: 'include',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentPlan(data.subscription_plan || null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user plan:', error);
+      }
+    };
+
+    fetchUserPlan();
+  }, [isAuthenticated]);
+
   const fetchClientSecret = useCallback(async () => {
-    // Get CSRF token from API
-    const tokenResponse = await fetch('/api/csrf-token', {
-      credentials: 'include',
-    });
-    const { token } = await tokenResponse.json();
+    try {
+      // Get CSRF token from API
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const { token } = await tokenResponse.json();
 
-    // Create a checkout session on the server
-    const response = await fetch('/api/stripe/create-checkout-session', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRF-TOKEN': token,
-      },
-      body: JSON.stringify({
-        price_id: priceId,
-      }),
-    });
+      // Create a checkout session on the server
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': token,
+        },
+        body: JSON.stringify({
+          price_id: priceId,
+        }),
+      });
 
-    const data = await response.json();
-    return data.clientSecret;
+      const data = await response.json();
+
+      // Handle upgrade/already subscribed cases
+      if (data.upgraded) {
+        // User was upgraded or downgraded successfully
+        const isUpgrade = data.new_plan === 'pro';
+        const features = isUpgrade
+          ? [
+              'Auto-Apply to relevant jobs while you sleep',
+              'Advanced AI resume & cover letter generation',
+              'Priority application tracking & reminders',
+              'Premium job matching with salary insights',
+              'Interview preparation tools',
+              'Advanced analytics & success metrics'
+            ]
+          : [
+              'Unlimited job applications',
+              'AI-powered resume analysis',
+              'Basic application tracking',
+              'Email support',
+              'Standard job matching algorithm'
+            ];
+
+        setSubscriptionChangeDetails({
+          type: isUpgrade ? 'upgrade' : 'downgrade',
+          plan: data.new_plan === 'pro' ? 'Pro' : 'Starter',
+          features
+        });
+        setShowSuccessModal(true);
+        return; // Don't return client secret, show modal instead
+      }
+
+      if (data.already_subscribed) {
+        // User is already on this plan
+        alert(data.error || 'You are already subscribed to this plan.');
+        setPriceId(null); // Go back to plan selection
+        return;
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      if (!data.clientSecret) {
+        throw new Error('No client secret received from server');
+      }
+
+      return data.clientSecret;
+    } catch (error) {
+      console.error('Error fetching client secret:', error);
+      setError(error instanceof Error ? error.message : 'Failed to initialize checkout');
+      throw error;
+    }
   }, [priceId]);
+
+  // Helper function to get button text based on current plan
+  const getButtonText = (targetPlan: 'starter' | 'pro') => {
+    if (!currentPlan) {
+      return 'Launch Your Membership';
+    }
+
+    if (currentPlan === targetPlan) {
+      return 'Current Plan';
+    }
+
+    if (currentPlan === 'pro' && targetPlan === 'starter') {
+      return 'Downgrade Benefits';
+    }
+
+    if (currentPlan === 'starter' && targetPlan === 'pro') {
+      return 'Accelerate Your Career Growth Now';
+    }
+
+    return 'Change Plan';
+  };
 
   // Build plans with price IDs from backend config
   const plans = (pricingConfig && pricingConfig.prices) ? [
@@ -244,8 +350,9 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
                   <Button
                     className="w-full bg-[#2D5BFF] hover:bg-[#1E3FCC] text-white"
                     onClick={() => setPriceId(plan.priceId)}
+                    disabled={currentPlan === (plan.name === 'Pro User Tier' ? 'pro' : 'starter')}
                   >
-                    Launch Your Membership
+                    {getButtonText(plan.name === 'Pro User Tier' ? 'pro' : 'starter')}
                   </Button>
                 </Card>
               ))}
@@ -273,6 +380,50 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
             </div>
           </div>
         </section>
+
+        {/* Success Modal */}
+        {showSuccessModal && subscriptionChangeDetails && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
+                  <Check className="h-8 w-8 text-green-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">
+                  {subscriptionChangeDetails.type === 'upgrade' ? 'Congratulations!' : 'Plan Changed'}
+                </h2>
+                <p className="text-[#4A4A4A]">
+                  You've successfully {subscriptionChangeDetails.type === 'upgrade' ? 'upgraded' : 'changed'} to the{' '}
+                  <span className="font-semibold">{subscriptionChangeDetails.plan} Tier</span>
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <h3 className="font-semibold text-[#1A1A1A] mb-3">
+                  {subscriptionChangeDetails.type === 'upgrade' ? 'Features You Just Unlocked:' : 'Your Plan Benefits:'}
+                </h3>
+                <ul className="space-y-2">
+                  {subscriptionChangeDetails.features.map((feature, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-[#4A4A4A] text-sm">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <Button
+                className="w-full bg-[#2D5BFF] hover:bg-[#1E3FCC] text-white"
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  window.location.href = '/dashboard';
+                }}
+              >
+                Go to Dashboard
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -356,6 +507,50 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && subscriptionChangeDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-8 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
+                <Check className="h-8 w-8 text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">
+                {subscriptionChangeDetails.type === 'upgrade' ? 'Congratulations!' : 'Plan Changed'}
+              </h2>
+              <p className="text-[#4A4A4A]">
+                You've successfully {subscriptionChangeDetails.type === 'upgrade' ? 'upgraded' : 'changed'} to the{' '}
+                <span className="font-semibold">{subscriptionChangeDetails.plan} Tier</span>
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-semibold text-[#1A1A1A] mb-3">
+                {subscriptionChangeDetails.type === 'upgrade' ? 'Features You Just Unlocked:' : 'Your Plan Benefits:'}
+              </h3>
+              <ul className="space-y-2">
+                {subscriptionChangeDetails.features.map((feature, index) => (
+                  <li key={index} className="flex items-start gap-2">
+                    <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-[#4A4A4A] text-sm">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <Button
+              className="w-full bg-[#2D5BFF] hover:bg-[#1E3FCC] text-white"
+              onClick={() => {
+                setShowSuccessModal(false);
+                window.location.href = '/dashboard';
+              }}
+            >
+              Go to Dashboard
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

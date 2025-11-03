@@ -34,6 +34,10 @@ class UserSettingsController extends Controller
                 'max_applications_per_day' => 10,
                 'show_to_recruiters' => true,
                 'hide_from_current_employer' => false,
+                'auto_apply_enabled' => false,
+                'auto_apply_frequency' => 'weekly',
+                'auto_apply_max_per_period' => 10,
+                'auto_apply_relevance' => 'high',
             ]
         );
 
@@ -78,6 +82,10 @@ class UserSettingsController extends Controller
             'max_applications_per_day' => 'integer|min:1|max:100',
             'show_to_recruiters' => 'boolean',
             'hide_from_current_employer' => 'boolean',
+            'auto_apply_enabled' => 'boolean',
+            'auto_apply_frequency' => 'in:daily,weekly',
+            'auto_apply_max_per_period' => 'integer|min:1|max:25',
+            'auto_apply_relevance' => 'in:high,medium,broad',
             'timezone' => 'nullable|string|timezone',
             'match_email_frequency' => 'in:daily,weekly,never',
         ]);

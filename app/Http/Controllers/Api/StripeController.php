@@ -20,17 +20,39 @@ class StripeController extends Controller
     /**
      * Create a Stripe Checkout session for subscription
      * Supports both authenticated and unauthenticated users
+     * Handles upgrades/downgrades for existing subscriptions
      */
     public function createCheckoutSession(Request $request)
     {
         $user = Auth::user();
+        $requestedPriceId = $request->input('price_id');
 
         try {
+            // If user is authenticated, check for existing subscription
+            if ($user && $user->stripe_subscription_id && $user->subscription_status === 'active') {
+                // User has an active subscription - check if they're trying to upgrade/downgrade
+                $subscription = \Stripe\Subscription::retrieve($user->stripe_subscription_id);
+
+                // Get current price ID
+                $currentPriceId = $subscription->items->data[0]->price->id ?? null;
+
+                // If trying to subscribe to the same plan, return error
+                if ($currentPriceId === $requestedPriceId) {
+                    return response()->json([
+                        'error' => 'You are already subscribed to this plan.',
+                        'already_subscribed' => true,
+                    ], 400);
+                }
+
+                // Handle upgrade/downgrade
+                return $this->upgradeSubscription($user, $subscription, $requestedPriceId);
+            }
+
             $sessionData = [
                 'ui_mode' => 'embedded',
                 'line_items' => [
                     [
-                        'price' => $request->input('price_id'), // Price ID from frontend
+                        'price' => $requestedPriceId,
                         'quantity' => 1,
                     ],
                 ],
@@ -78,6 +100,61 @@ class StripeController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Upgrade or downgrade an existing subscription
+     */
+    protected function upgradeSubscription($user, $currentSubscription, $newPriceId)
+    {
+        try {
+            // Update the subscription to the new price
+            $subscription = \Stripe\Subscription::update($currentSubscription->id, [
+                'items' => [
+                    [
+                        'id' => $currentSubscription->items->data[0]->id,
+                        'price' => $newPriceId,
+                    ],
+                ],
+                'proration_behavior' => 'always_invoice', // Pro-rate the difference immediately
+            ]);
+
+            // Determine the new plan
+            $newPlan = $this->determinePlanFromPrice($newPriceId);
+
+            // Update user record
+            $user->update([
+                'subscription_plan' => $newPlan,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'upgraded' => true,
+                'message' => 'Your subscription has been upgraded successfully!',
+                'new_plan' => $newPlan,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Determine plan from price ID
+     */
+    protected function determinePlanFromPrice($priceId)
+    {
+        $starterPriceId = config('services.stripe.prices.starter');
+        $proPriceId = config('services.stripe.prices.pro');
+
+        if ($priceId === $proPriceId) {
+            return 'pro';
+        } elseif ($priceId === $starterPriceId) {
+            return 'starter';
+        }
+
+        return 'unknown';
     }
 
     /**

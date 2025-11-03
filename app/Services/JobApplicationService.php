@@ -1065,7 +1065,7 @@ class JobApplicationService
         $sendgrid = new SendGrid(env('SENDGRID_API_KEY'));
 
         $email = new Mail();
-        $email->setFrom("hq@appliflow.ai", $application->form_data_sent['personal']['full_name']);
+        $email->setFrom(env('MAIL_FROM_ADDRESS', 'outreach@mail.appliflow.ai'), $application->form_data_sent['personal']['full_name']);
         $email->setSubject($emailContent['subject']);
 
         // Check if in test email mode

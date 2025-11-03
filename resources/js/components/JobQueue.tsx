@@ -54,6 +54,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   const [credits, setCredits] = useState<number>(0);
   const [creditsAnimating, setCreditsAnimating] = useState<boolean>(false);
   const [hasSubscription, setHasSubscription] = useState<boolean>(false);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | null>(null);
+  const [autoApplyEnabled, setAutoApplyEnabled] = useState<boolean>(false);
+  const [showAutoApplyBanner, setShowAutoApplyBanner] = useState<boolean>(false);
 
   // Application processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -206,18 +209,28 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
       if (response.ok) {
         const data = await response.json();
+        const settings = data.settings || data;
 
         // Check if any filters are explicitly set
         const hasFilters = !!(
-          data?.min_salary ||
-          data?.max_salary ||
-          data?.preferred_location ||
-          data?.preferred_job_title ||
-          (data?.employment_types && Object.values(data.employment_types).some((v: any) => v === true)) ||
-          (data?.work_arrangement && Object.values(data.work_arrangement).some((v: any) => v === true))
+          settings?.min_salary ||
+          settings?.max_salary ||
+          settings?.preferred_location ||
+          settings?.preferred_job_title ||
+          (settings?.employment_types && Object.values(settings.employment_types).some((v: any) => v === true)) ||
+          (settings?.work_arrangement && Object.values(settings.work_arrangement).some((v: any) => v === true))
         );
 
         setHasActiveFilters(hasFilters);
+
+        // Check auto-apply configuration
+        const autoApplyConfigured = settings?.auto_apply_enabled || false;
+        setAutoApplyEnabled(autoApplyConfigured);
+
+        // Show banner if user has Pro subscription but hasn't configured auto-apply
+        const dismissed = localStorage.getItem('autoApplyBannerDismissed');
+        const isPro = subscriptionPlan === 'pro';
+        setShowAutoApplyBanner(isPro && !autoApplyConfigured && !dismissed);
       }
     } catch (error) {
       console.error('Error fetching user settings:', error);
@@ -238,6 +251,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
         const data = await response.json();
         const newCredits = data.credits || 0;
         setHasSubscription(data.has_subscription || false);
+        setSubscriptionPlan(data.subscription_plan || null);
 
         if (animate && newCredits !== credits) {
           setCreditsAnimating(true);
@@ -643,8 +657,52 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
   const buttonContent = getButtonContent();
 
+  const handleDismissBanner = () => {
+    localStorage.setItem('autoApplyBannerDismissed', 'true');
+    setShowAutoApplyBanner(false);
+  };
+
+  const handleConfigureAutoApply = () => {
+    // This will be handled by parent component (Dashboard) to switch to settings tab
+    const event = new CustomEvent('openSettings', { detail: { section: 'auto-apply' } });
+    window.dispatchEvent(event);
+    handleDismissBanner();
+  };
+
   return (
     <div className="space-y-6">
+      {/* Auto-Apply Banner */}
+      {showAutoApplyBanner && (
+        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-500 p-4 rounded-md shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Zap className="h-5 w-5 text-amber-600" />
+              <div>
+                <h4 className="font-semibold text-gray-900">Auto-Apply is Available!</h4>
+                <p className="text-sm text-gray-700">
+                  Let AppliFlow automatically apply to jobs for you.
+                  <button
+                    onClick={handleConfigureAutoApply}
+                    className="ml-1 text-amber-700 underline font-medium hover:text-amber-800"
+                  >
+                    Configure now
+                  </button>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleDismissBanner}
+              className="text-gray-500 hover:text-gray-700 p-1"
+              aria-label="Dismiss"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between pt-8">
         <div className="flex items-center gap-3">
@@ -659,10 +717,15 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
           {hasSubscription ? (
             <Badge
               style={{
-                backgroundColor: '#8B5CF6',
-                color: 'white'
+                backgroundImage: subscriptionPlan === 'pro'
+                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                  : 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
+                color: 'white',
+                boxShadow: subscriptionPlan === 'pro'
+                  ? '0 2px 8px rgba(245, 158, 11, 0.3)'
+                  : '0 2px 8px rgba(139, 92, 246, 0.3)'
               }}
-              className="px-3 py-1 border-transparent"
+              className="px-3 py-1 border-transparent font-semibold"
             >
               Subscribed
             </Badge>
