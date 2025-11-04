@@ -26,6 +26,12 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
   const [isUploading, setIsUploading] = useState(false);
   const [viewMode, setViewMode] = useState<'role-search' | 'upload'>('role-search');
 
+  const handleSwitchToUpload = () => {
+    setViewMode('upload');
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Add keyframe animation for subtle floating effect
   const floatKeyframes = `
     @keyframes float {
@@ -189,7 +195,7 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
 
             {/* Role Search View */}
             {viewMode === 'role-search' && (
-              <RoleSearchPreview onUploadResume={() => setViewMode('upload')} />
+              <RoleSearchPreview onUploadResume={handleSwitchToUpload} />
             )}
 
             {/* Upload View */}

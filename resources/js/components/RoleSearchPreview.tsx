@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "./ui/button";
 import { Search, Building2, MapPin, DollarSign, TrendingUp } from "lucide-react";
 
@@ -47,6 +47,14 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [message, setMessage] = useState<string>("");
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to results when they become visible
+  useEffect(() => {
+    if (showResults && resultsRef.current) {
+      resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showResults]);
 
   const searchJobs = async (role: string) => {
     if (!role || role.length < 2) return;
@@ -156,6 +164,7 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
       {/* Results Section */}
       {!isLoading && showResults && (
         <div
+          ref={resultsRef}
           className="transition-all duration-500 ease-out"
           style={{
             opacity: showResults ? 1 : 0,
