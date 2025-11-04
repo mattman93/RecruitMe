@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { LavaLampBackground } from "./LavaLampBackground";
+import { RoleSearchPreview } from "./RoleSearchPreview";
 import { Lock, Shield, Clock } from "lucide-react";
 
 interface GuestUploadData {
@@ -23,6 +24,7 @@ interface HeroSectionProps {
 export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplete }: HeroSectionProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [viewMode, setViewMode] = useState<'role-search' | 'upload'>('role-search');
 
   // Add keyframe animation for subtle floating effect
   const floatKeyframes = `
@@ -157,75 +159,112 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
           </Button>
         ) : (
           <>
-            {/* Guest Upload Area */}
-            <div className="max-w-xl mx-auto mb-6">
-              <div
+            {/* View Mode Toggle */}
+            <div className="flex justify-center gap-2 mb-8">
+              <button
+                onClick={() => setViewMode('role-search')}
                 className={`
-                  relative border-2 border-dashed rounded-xl p-8
-                  transition-all duration-300 cursor-pointer
-                  ${isDragOver
-                    ? 'border-white bg-white/20 scale-[1.02]'
-                    : 'border-white/40 bg-white/10 hover:border-white/60 hover:bg-white/15'
+                  px-6 py-3 rounded-lg font-semibold transition-all duration-300
+                  ${viewMode === 'role-search'
+                    ? 'bg-white text-indigo-600 shadow-lg'
+                    : 'bg-white/10 text-white hover:bg-white/20'
                   }
                 `}
-                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                onDragLeave={(e) => { e.preventDefault(); setIsDragOver(false); }}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById('hero-file-input')?.click()}
               >
-                {isUploading ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
-                    <p className="text-white font-medium">Analyzing your resume...</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3">
-                    <div
-                      className="p-3 bg-white/20 rounded-full backdrop-blur-sm"
-                      style={{
-                        animation: 'float 3s ease-in-out infinite'
-                      }}
-                    >
-                      <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-white font-semibold text-lg mb-1">
-                        Find jobs that match your resume instantly
-                      </p>
-                      <p className="text-white text-sm">
-                        Drop your resume to see what roles fit you best.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <input
-                id="hero-file-input"
-                type="file"
-                className="hidden"
-                accept=".pdf,.doc,.docx"
-                onChange={handleFileSelect}
-              />
+                Search by Role
+              </button>
+              <button
+                onClick={() => setViewMode('upload')}
+                className={`
+                  px-6 py-3 rounded-lg font-semibold transition-all duration-300
+                  ${viewMode === 'upload'
+                    ? 'bg-white text-indigo-600 shadow-lg'
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                  }
+                `}
+              >
+                Upload Resume
+              </button>
             </div>
 
-            {/* Trust Signals */}
-            <div className="flex items-center justify-center gap-6 text-white/90 text-sm">
-              <div className="flex items-center gap-2">
-                <Lock className="h-4 w-4" />
-                <span>Encrypted & Private</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                <span>No Spam</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                <span>2-Minute Setup</span>
-              </div>
-            </div>
+            {/* Role Search View */}
+            {viewMode === 'role-search' && (
+              <RoleSearchPreview onUploadResume={() => setViewMode('upload')} />
+            )}
+
+            {/* Upload View */}
+            {viewMode === 'upload' && (
+              <>
+                <div className="max-w-xl mx-auto mb-6">
+                  <div
+                    className={`
+                      relative border-2 border-dashed rounded-xl p-8
+                      transition-all duration-300 cursor-pointer
+                      ${isDragOver
+                        ? 'border-white bg-white/20 scale-[1.02]'
+                        : 'border-white/40 bg-white/10 hover:border-white/60 hover:bg-white/15'
+                      }
+                    `}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); setIsDragOver(false); }}
+                    onDrop={handleDrop}
+                    onClick={() => document.getElementById('hero-file-input')?.click()}
+                  >
+                    {isUploading ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                        <p className="text-white font-medium">Analyzing your resume...</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <div
+                          className="p-3 bg-white/20 rounded-full backdrop-blur-sm"
+                          style={{
+                            animation: 'float 3s ease-in-out infinite'
+                          }}
+                        >
+                          <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-white font-semibold text-lg mb-1">
+                            Find jobs that match your resume instantly
+                          </p>
+                          <p className="text-white text-sm">
+                            Drop your resume to see what roles fit you best.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    id="hero-file-input"
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleFileSelect}
+                  />
+                </div>
+
+                {/* Trust Signals */}
+                <div className="flex items-center justify-center gap-6 text-white/90 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    <span>Encrypted & Private</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    <span>No Spam</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    <span>2-Minute Setup</span>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

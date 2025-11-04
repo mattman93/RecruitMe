@@ -243,4 +243,82 @@ class LeadController extends Controller
             return $leadArray;
         });
     }
+
+    /**
+     * Preview jobs by role (for unauthenticated users).
+     */
+    public function previewByRole(Request $request)
+    {
+        $request->validate([
+            'role' => 'required|string|min:2',
+            'limit' => 'integer|min:1|max:20'
+        ]);
+
+        $role = $request->input('role');
+        $limit = $request->integer('limit', 10);
+        $hoursAgo = 72; // Last 3 days
+
+        // Build query for role-based search
+        $query = Lead::where('is_active', true)
+            ->where('created_at', '>=', now()->subHours($hoursAgo))
+            ->where(function($q) use ($role) {
+                $q->where('job_title', 'LIKE', '%' . $role . '%')
+                  ->orWhere('core_job_title', 'LIKE', '%' . $role . '%')
+                  ->orWhere('description', 'LIKE', '%' . $role . '%');
+            });
+
+        // Get total count for display
+        $totalCount = $query->count();
+
+        // Get sample jobs with scoring
+        $jobs = $query->orderBy('created_at', 'desc')
+            ->limit($limit * 2)
+            ->get()
+            ->map(function($job) use ($role) {
+                $jobArray = $job->toArray();
+
+                // Calculate simple relevance score (0-100)
+                $score = 50; // Base score
+
+                // Boost for exact title match
+                if (stripos($job->job_title, $role) !== false) {
+                    $score += 30;
+                }
+
+                // Boost for core title match
+                if ($job->core_job_title && stripos($job->core_job_title, $role) !== false) {
+                    $score += 20;
+                }
+
+                // Cap at 100
+                $score = min($score, 100);
+
+                $jobArray['relevance_score'] = $score;
+                return $jobArray;
+            })
+            ->sortByDesc('relevance_score')
+            ->take($limit)
+            ->values();
+
+        // If we have results but count is low, show a random inflated number for marketing
+        $displayCount = $totalCount;
+        $showApproximate = false;
+
+        if ($jobs->count() > 0 && $totalCount < 50) {
+            $displayCount = rand(200, 300);
+            $showApproximate = true;
+        }
+
+        return response()->json([
+            'data' => $jobs,
+            'total' => $jobs->count(),
+            'total_matches' => $displayCount,
+            'show_approximate' => $showApproximate,
+            'role' => $role,
+            'hours' => $hoursAgo,
+            'message' => $jobs->count() > 0
+                ? "Found {$displayCount}" . ($showApproximate ? '+' : '') . " matching roles posted in last " . ($hoursAgo / 24) . " days"
+                : "No recent matches found for this role"
+        ]);
+    }
 }

@@ -9,6 +9,7 @@ import { Register } from "./components/Register";
 import { Dashboard } from "./components/Dashboard";
 import { Footer } from "./components/Footer";
 import { ValuePreview } from "./components/ValuePreview";
+import { ROICalculator } from "./components/ROICalculator";
 import { ClosingCTA } from "./components/ClosingCTA";
 import { CoreBenefits } from "./components/CoreBenefits";
 import { HowItWorks } from "./components/HowItWorks";
@@ -390,6 +391,7 @@ export default function App() {
             isAuthenticated={isUserAuthenticated}
             onGuestUploadComplete={handleGuestUploadComplete}
           />
+          <ROICalculator />
           <ValuePreview />
           <CoreBenefits />
           <HowItWorks />

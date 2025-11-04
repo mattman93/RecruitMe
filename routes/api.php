@@ -21,6 +21,7 @@ Route::get('/applications/batch-status/{batchId}', [\App\Http\Controllers\Api\Jo
 // Leads endpoints - handle auth internally
 Route::get('/leads', [LeadController::class, 'index']);
 Route::get('/leads/relevant', [LeadController::class, 'relevant']);
+Route::get('/leads/preview-by-role', [LeadController::class, 'previewByRole']);
 
 // Form preferences endpoint for learning system (POST only - GET is protected)
 Route::post('/form-preferences', [FormPreferenceController::class, 'store']);
