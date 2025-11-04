@@ -28,8 +28,8 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
 
   const handleSwitchToUpload = () => {
     setViewMode('upload');
-    // Scroll to top of page
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to just below the navbar (so navbar is not visible)
+    window.scrollTo({ top: 100, behavior: 'smooth' });
   };
 
   // Add keyframe animation for subtle floating effect
