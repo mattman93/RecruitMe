@@ -49,12 +49,6 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
   const [message, setMessage] = useState<string>("");
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to results when they become visible
-  useEffect(() => {
-    if (showResults && resultsRef.current) {
-      resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [showResults]);
 
   const searchJobs = async (role: string) => {
     if (!role || role.length < 2) return;
@@ -80,7 +74,7 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
       setShowApproximate(data.show_approximate || false);
       setMessage(data.message || "");
 
-      // Animate in results after a brief delay
+      // Animate in results after API completes
       setTimeout(() => {
         setShowResults(true);
       }, 300);
@@ -98,6 +92,14 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
   const handleRoleSelect = (role: string) => {
     setSelectedRole(role);
     setSearchInput(role);
+
+    // Scroll to loading section immediately
+    setTimeout(() => {
+      if (resultsRef.current) {
+        resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+
     searchJobs(role);
   };
 
@@ -153,24 +155,26 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
         </div>
       </div>
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mx-auto mb-4"></div>
-          <p className="text-white font-medium">Finding matches for {selectedRole}...</p>
-        </div>
-      )}
+      {/* Results Container (for scroll target) */}
+      <div ref={resultsRef}>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mx-auto mb-4"></div>
+            <p className="text-white font-medium">Finding matches for {selectedRole}...</p>
+          </div>
+        )}
 
-      {/* Results Section */}
-      {!isLoading && showResults && (
-        <div
-          ref={resultsRef}
-          className="transition-all duration-500 ease-out"
-          style={{
-            opacity: showResults ? 1 : 0,
-            transform: showResults ? 'translateY(0)' : 'translateY(20px)'
-          }}
-        >
+        {/* Results Section */}
+        {!isLoading && jobs.length > 0 && (
+          <div
+            className="transition-all duration-2000 ease-out"
+            style={{
+              opacity: showResults ? 1 : 0,
+              transform: showResults ? 'translateY(0)' : 'translateY(20px)',
+              visibility: showResults ? 'visible' : 'hidden'
+            }}
+          >
           {/* Stats Header */}
           {totalMatches > 0 && (
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border border-white/20">
@@ -291,8 +295,9 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
               </Button>
             </div>
           )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* CSS for animations */}
       <style>{`
