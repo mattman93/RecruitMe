@@ -10,6 +10,7 @@ import { Dashboard } from "./components/Dashboard";
 import { Footer } from "./components/Footer";
 import { ValuePreview } from "./components/ValuePreview";
 import { ROICalculator } from "./components/ROICalculator";
+import { ProFeatureShowcase } from "./components/ProFeatureShowcase";
 import { ClosingCTA } from "./components/ClosingCTA";
 import { CoreBenefits } from "./components/CoreBenefits";
 import { HowItWorks } from "./components/HowItWorks";
@@ -392,6 +393,7 @@ export default function App() {
             onGuestUploadComplete={handleGuestUploadComplete}
           />
           <ROICalculator />
+          <ProFeatureShowcase />
           <ValuePreview />
           <CoreBenefits />
           <HowItWorks />

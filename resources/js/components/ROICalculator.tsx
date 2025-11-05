@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Slider } from "./ui/slider";
 import { Clock, TrendingUp, Zap } from "lucide-react";
+import { useScrollAnimation } from "./hooks/useScrollAnimation";
 
 export function ROICalculator() {
+  const { ref, isVisible } = useScrollAnimation(0.3);
   const [timePerApp, setTimePerApp] = useState<number>(15); // minutes
   const [appsPerWeek, setAppsPerWeek] = useState<number>(5);
 
@@ -24,7 +26,7 @@ export function ROICalculator() {
   const proTimeSaved = hoursPerWeek - proHoursPerWeek;
 
   return (
-    <section className="w-full bg-gradient-to-b from-white to-gray-50 py-20">
+    <section className={`w-full bg-gradient-to-b from-white to-gray-50 py-20 fade-in ${isVisible ? 'visible' : ''}`} ref={ref}>
       <div className="max-w-6xl mx-auto px-6">
         {/* Header */}
         <div className="text-center mb-12">
