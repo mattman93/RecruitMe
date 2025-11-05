@@ -135,14 +135,14 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
         </form>
 
         {/* Quick Select Buttons */}
-        <div className="flex flex-wrap justify-center gap-3 mb-8">
+        <div className="flex justify-center gap-2 mb-8">
           {POPULAR_ROLES.map((role) => (
             <Button
               key={role}
               onClick={() => handleRoleSelect(role)}
               variant={selectedRole === role ? "default" : "outline"}
               className={`
-                px-4 py-2 rounded-full font-medium transition-all duration-300
+                px-3 py-2 rounded-full font-medium transition-all duration-300 text-sm
                 ${selectedRole === role
                   ? 'bg-white text-indigo-600 hover:bg-white/90'
                   : 'bg-white/10 text-white border-white/30 hover:bg-white/20 hover:border-white/50'
