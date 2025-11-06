@@ -23,8 +23,10 @@ import { TermsOfService } from "./components/TermsOfService";
 import { Subscribe } from "./components/Subscribe";
 import { SubscribeSuccess } from "./components/SubscribeSuccess";
 import { GuestPreviewModal } from "./components/GuestPreviewModal";
+import { ForgotPassword } from "./components/ForgotPassword";
+import { ResetPassword } from "./components/ResetPassword";
 
-type AppState = 'loading' | 'guest' | 'login' | 'register' | 'authenticated' | 'upload' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms' | 'subscribe' | 'subscribe-success';
+type AppState = 'loading' | 'guest' | 'login' | 'register' | 'authenticated' | 'upload' | 'enterprise' | 'contact-us' | 'admin-data-ingestion' | 'privacy' | 'terms' | 'subscribe' | 'subscribe-success' | 'forgot-password' | 'reset-password';
 
 interface GuestPreviewData {
   sessionId: string;
@@ -46,6 +48,8 @@ export default function App() {
   const [guestPreviewData, setGuestPreviewData] = useState<GuestPreviewData | null>(null);
   const [showGuestPreview, setShowGuestPreview] = useState(false);
   const [registerInitialValues, setRegisterInitialValues] = useState<{name?: string; email?: string}>({});
+  const [resetPasswordToken, setResetPasswordToken] = useState<string>('');
+  const [resetPasswordEmail, setResetPasswordEmail] = useState<string>('');
 
   // Check authentication status only on initial app load
   useEffect(() => {
@@ -72,6 +76,21 @@ export default function App() {
 
   const checkAuthStatus = async () => {
     try {
+      // Check for password reset URL (format: /reset-password/{token}?email=...)
+      const urlParams = new URLSearchParams(window.location.search);
+      const pathParts = window.location.pathname.split('/');
+      const isResetPasswordPath = pathParts[1] === 'reset-password' && pathParts.length > 2;
+      const token = isResetPasswordPath ? pathParts[2] : null;
+      const email = urlParams.get('email');
+
+      if (token && email) {
+        // This is a password reset link
+        setResetPasswordToken(token);
+        setResetPasswordEmail(email);
+        setAppState('reset-password');
+        return;
+      }
+
       const response = await fetch('/api/auth/check', {
         credentials: 'include',
         headers: {
@@ -103,6 +122,8 @@ export default function App() {
           setAppState('privacy');
         } else if (window.location.pathname === '/terms') {
           setAppState('terms');
+        } else if (window.location.pathname === '/forgot-password') {
+          setAppState('forgot-password');
         } else {
           setAppState('guest');
         }
@@ -119,6 +140,8 @@ export default function App() {
           setAppState('subscribe');
         } else if (window.location.pathname === '/subscribe/success') {
           setAppState('subscribe-success');
+        } else if (window.location.pathname === '/forgot-password') {
+          setAppState('forgot-password');
         } else {
           setAppState('guest');
         }
@@ -144,6 +167,10 @@ export default function App() {
 
   const handleSwitchToLogin = () => {
     setAppState('login');
+  };
+
+  const handleSwitchToForgotPassword = () => {
+    setAppState('forgot-password');
   };
 
   const handleRegister = async () => {
@@ -312,9 +339,38 @@ export default function App() {
                 ← Back to home
               </button>
             </div>
-            <Login onLogin={handleLogin} onSwitchToRegister={handleSwitchToRegister} isPrelaunch={isPrelaunch} />
+            <Login
+              onLogin={handleLogin}
+              onSwitchToRegister={handleSwitchToRegister}
+              onForgotPassword={handleSwitchToForgotPassword}
+              isPrelaunch={isPrelaunch}
+            />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Forgot Password state
+  if (appState === 'forgot-password') {
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <ForgotPassword onBackToLogin={isUserAuthenticated ? handleGoDashboard : handleSwitchToLogin} />
+      </div>
+    );
+  }
+
+  // Reset Password state
+  if (appState === 'reset-password') {
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <ResetPassword
+          token={resetPasswordToken}
+          email={resetPasswordEmail}
+          onSuccess={handleSwitchToLogin}
+        />
       </div>
     );
   }

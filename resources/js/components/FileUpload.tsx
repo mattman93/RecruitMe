@@ -17,6 +17,7 @@ interface UploadedFile {
 interface FileUploadProps {
   isAuthenticated?: boolean;
   onUploadSuccess?: () => void;
+  isReplacing?: boolean;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -30,7 +31,7 @@ const ALLOWED_TYPES = {
   'image/webp': 'WebP'
 };
 
-export function FileUpload({ isAuthenticated = false, onUploadSuccess }: FileUploadProps) {
+export function FileUpload({ isAuthenticated = false, onUploadSuccess, isReplacing = false }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -142,7 +143,14 @@ export function FileUpload({ isAuthenticated = false, onUploadSuccess }: FileUpl
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errorData = await response.json();
+
+        // Handle rate limit error specially
+        if (response.status === 429 && errorData.limit_reached) {
+          throw new Error(errorData.message || 'Resume replacement limit reached');
+        }
+
+        throw new Error(errorData.message || 'Upload failed');
       }
 
       return await response.json();
@@ -175,7 +183,8 @@ export function FileUpload({ isAuthenticated = false, onUploadSuccess }: FileUpl
       }
 
     } catch (error) {
-      setErrors(['Upload failed. Please try again.']);
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed. Please try again.';
+      setErrors([errorMessage]);
       console.error('Upload process failed:', error);
     } finally {
       setIsProcessing(false);
@@ -248,6 +257,18 @@ export function FileUpload({ isAuthenticated = false, onUploadSuccess }: FileUpl
 
   return (
     <div className="flex-1 p-8 space-y-6">
+      {/* Replacement Warning */}
+      {isReplacing && uploadedFiles.length === 0 && (
+        <div className="max-w-6xl mx-auto">
+          <Alert className="border-amber-500/50 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800">
+              <strong>Note:</strong> Uploading a new resume will replace your existing resume and work experience. Your previous resume file will be permanently deleted.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+
       {/* Error Messages */}
       {errors.length > 0 && (
         <div className="max-w-6xl mx-auto space-y-2">

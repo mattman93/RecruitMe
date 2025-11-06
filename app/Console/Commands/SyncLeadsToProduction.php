@@ -70,14 +70,14 @@ class SyncLeadsToProduction extends Command
         $this->info('📤 Uploading to production...');
 
         $scpCommand = sprintf(
-            'scp %s %s@%s:%s/storage/app/exports/',
+            'scp -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 %s %s@%s:%s/storage/app/exports/',
             escapeshellarg($exportFile),
             escapeshellarg($prodUser),
             escapeshellarg($prodHost),
             escapeshellarg($prodPath)
         );
 
-        $result = Process::run($scpCommand);
+        $result = Process::timeout(120)->run($scpCommand);
 
         if (!$result->successful()) {
             $this->error('❌ Failed to upload file to production');

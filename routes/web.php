@@ -90,6 +90,21 @@ Route::get('/', function () {
 Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('/register', [RegisterController::class, 'register']);
 
+// Forgot Password routes
+Route::get('/forgot-password', function () {
+    return Inertia::render('Welcome'); // Load the React SPA which will handle the forgot-password state
+})->name('password.request');
+
+Route::post('/forgot-password', [\App\Http\Controllers\Auth\PasswordResetLinkController::class, 'store'])
+    ->name('password.email');
+
+Route::get('/reset-password/{token}', function ($token) {
+    return Inertia::render('Welcome'); // Load the React SPA which will handle the reset-password state
+})->name('password.reset');
+
+Route::post('/reset-password', [\App\Http\Controllers\Auth\NewPasswordController::class, 'store'])
+    ->name('password.store');
+
 // Password reset routes (Laravel's built-in)
 /*
 Route::get('password/reset', 'Auth\ForgotPasswordController@showLinkRequestForm')->name('password.request');

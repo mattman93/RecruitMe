@@ -54,6 +54,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/flow-rank', [\App\Http\Controllers\Api\UserController::class, 'getFlowRank']);
     Route::get('/user/has-resume', [\App\Http\Controllers\Api\UserController::class, 'hasResume']);
     Route::get('/user/credits', [\App\Http\Controllers\Api\UserController::class, 'getCredits']);
+    Route::get('/user/resume-replacement-status', [\App\Http\Controllers\Api\UserController::class, 'getResumeReplacementStatus']);
+    Route::delete('/user/delete-account', [\App\Http\Controllers\Api\UserController::class, 'deleteAccount']);
 
     // User Settings
     Route::get('/user/settings', [\App\Http\Controllers\Api\UserSettingsController::class, 'index']);

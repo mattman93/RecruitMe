@@ -96,6 +96,15 @@ export function Dashboard() {
   const [hasSubscription, setHasSubscription] = useState(false);
   const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | null>(null);
 
+  // Resume replacement limit state
+  const [replacementsUsed, setReplacementsUsed] = useState(0);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [replacementsRemaining, setReplacementsRemaining] = useState(3);
+  const [canReplace, setCanReplace] = useState(true);
+  const [hoursUntilReset, setHoursUntilReset] = useState(0);
+
   const itemsPerPage = 10;
   useEffect(() => {
     fetchUploadedResume();
@@ -104,6 +113,7 @@ export function Dashboard() {
     fetchOAuthStatus();
     fetchUserApplications();
     fetchAccountInfo();
+    fetchResumeReplacementStatus();
   }, []);
 
   // Fetch settings when settings tab is opened
@@ -239,6 +249,31 @@ const fetchAccountInfo = async () => {
     }
   } catch (error) {
     console.error('Error fetching account info:', error);
+  }
+};
+
+const fetchResumeReplacementStatus = async () => {
+  try {
+    const response = await fetch('/api/user/resume-replacement-status', {
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Resume replacement status:', data);
+      setReplacementsUsed(data.replacements_used || 0);
+      setReplacementsRemaining(data.replacements_remaining || 3);
+      setCanReplace(data.can_replace ?? true);
+      setHoursUntilReset(data.hours_until_reset || 0);
+    } else {
+      console.error('Failed to fetch resume replacement status:', response.status);
+    }
+  } catch (error) {
+    console.error('Error fetching resume replacement status:', error);
   }
 };
 
@@ -459,6 +494,47 @@ const fetchOAuthStatus = async () => {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') {
+      alert('Please type DELETE to confirm');
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+
+      // Fetch CSRF token
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const csrfToken = await tokenResponse.json();
+
+      const response = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken.token,
+        },
+      });
+
+      if (response.ok) {
+        // Redirect to home page after successful deletion
+        window.location.href = '/';
+      } else {
+        const error = await response.json();
+        console.error('Delete failed:', error);
+        alert(`Failed to delete account: ${error.error || error.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('Failed to delete account. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const mapApplicationStatus = (status: string): ApplicationStatus => {
     switch (status) {
       case 'submitted':
@@ -493,6 +569,7 @@ const fetchOAuthStatus = async () => {
           onAuthRequired={() => {}}
           onShowLogin={() => {}}
           isAuthenticated={true}
+          isReplacing={uploadedResume !== null}
           onUploadSuccess={() => {
             setShowUploadView(false);
             fetchUploadedResume();
@@ -620,11 +697,35 @@ const fetchOAuthStatus = async () => {
                     {/* Header with Edit button */}
                     <div className="flex items-center justify-between">
                       <h2 className="text-xl font-semibold text-[#1A1A1A]">Resume</h2>
-                      <button className="text-sm font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          if (canReplace) {
+                            setShowUploadView(true);
+                          }
+                        }}
+                        disabled={!canReplace}
+                        className={`text-sm font-medium flex items-center gap-1 transition-colors ${
+                          canReplace
+                            ? 'text-primary hover:text-primary/80 cursor-pointer'
+                            : 'text-gray-400 cursor-not-allowed'
+                        }`}
+                        title={!canReplace ? `Limit reached. Reset in ${Math.ceil(hoursUntilReset)} hours` : ''}
+                      >
                         <Edit2 className="h-4 w-4" />
-                        Edit
+                        Replace
                       </button>
                     </div>
+                    {/* Replacement Limit Info */}
+                    {replacementsUsed > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        Replacements used: {replacementsUsed}/3
+                        {!canReplace && hoursUntilReset > 0 && (
+                          <span className="text-amber-600 ml-2">
+                            (Resets in {Math.ceil(hoursUntilReset)}h)
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {/* File Info */}
                     <div className="flex items-center gap-4">
                       <div className="flex-shrink-0 p-3 bg-primary/10 rounded-lg">
@@ -1217,26 +1318,6 @@ const fetchOAuthStatus = async () => {
               </div>
             </Card>
 
-            {/* Account Actions */}
-            <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">Account</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">Connected Accounts</Label>
-                  <p className="text-sm text-muted-foreground mb-3">Manage your connected services</p>
-                  <div className="flex items-center gap-3">
-                    <Badge variant={hasGmailOAuth ? "default" : "secondary"}>
-                      {hasGmailOAuth ? "✓ Google Connected" : "Google Not Connected"}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="pt-4 border-t">
-                  <Button variant="outline" className="w-full">
-                    Export Application Data
-                  </Button>
-                </div>
-              </div>
-            </Card>
 
                 </div>
 
@@ -1303,25 +1384,53 @@ const fetchOAuthStatus = async () => {
                           )}
                         </div>
                       </div>
+                    </div>
+                  </Card>
 
-                      {/* Divider */}
+                  {/* Account Actions */}
+                  <Card className="p-6">
+                    <h3 className="font-semibold text-foreground mb-4">Account</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium">Connected Accounts</Label>
+                        <p className="text-sm text-muted-foreground mb-3">Manage your connected services</p>
+                        <div className="flex items-center gap-3">
+                          <Badge variant={hasGmailOAuth ? "default" : "secondary"}>
+                            {hasGmailOAuth ? "✓ Google Connected" : "Google Not Connected"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t">
+                        <Button variant="outline" className="w-full">
+                          Export Application Data
+                        </Button>
+                      </div>
+
                       <div className="border-t pt-4 space-y-3">
                         {/* Change Password */}
-                        <Button variant="outline" className="w-full justify-start" asChild>
-                          <a href="#change-password" className="flex items-center gap-2">
-                            <Lock size={16} />
-                            Change Password
-                          </a>
-                        </Button>
-
-                        {/* Delete Account */}
                         <Button
                           variant="outline"
-                          className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                          className="w-full justify-start"
+                          onClick={() => window.location.href = '/forgot-password'}
                         >
-                          <Trash2 size={16} className="mr-2" />
-                          Delete Account
+                          <Lock size={16} className="mr-2" />
+                          Change Password
                         </Button>
+
+                        {/* Danger Zone - Delete Account */}
+                        <div className="pt-2">
+                          <Label className="text-sm font-medium text-destructive">Danger Zone</Label>
+                          <p className="text-sm text-muted-foreground mb-3">Permanently delete your account</p>
+                          <Button
+                            variant="destructive"
+                            className="w-full"
+                            onClick={() => setShowDeleteConfirm(true)}
+                          >
+                            <Trash2 size={16} className="mr-2" />
+                            Delete Account
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </Card>
@@ -1344,6 +1453,70 @@ const fetchOAuthStatus = async () => {
         )}
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="max-w-md w-full p-6 bg-white">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-destructive/10 p-2">
+                  <Trash2 className="h-6 w-6 text-destructive" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-foreground">Delete Account</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    This action cannot be undone. This will permanently delete your account and remove all of your data from our servers.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Type <span className="font-mono font-bold">DELETE</span> to confirm
+                </Label>
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  className="font-mono"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeleteConfirmText('');
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={handleDeleteAccount}
+                  disabled={isDeleting || deleteConfirmText !== 'DELETE'}
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete Account'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
       <Footer />
     </div>
   );

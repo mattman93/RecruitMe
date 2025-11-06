@@ -218,4 +218,68 @@ class UserController extends Controller
             'subscription_plan' => $user->getSubscriptionPlan(),
         ]);
     }
+
+    public function getResumeReplacementStatus(Request $request)
+    {
+        $user = Auth::user();
+
+        // Check if 48 hours have passed since last reset
+        if ($user->last_resume_replacement_reset_at) {
+            $hoursSinceReset = $user->last_resume_replacement_reset_at->diffInHours(now());
+
+            // If 48 hours have passed, the counter would be reset
+            if ($hoursSinceReset >= 48) {
+                $replacementsUsed = 0;
+                $hoursUntilReset = 0;
+                $canReplace = true;
+            } else {
+                $replacementsUsed = $user->resume_replacement_count;
+                $hoursUntilReset = 48 - $hoursSinceReset;
+                $canReplace = $replacementsUsed < 3;
+            }
+        } else {
+            // Never replaced before
+            $replacementsUsed = $user->resume_replacement_count;
+            $hoursUntilReset = 0;
+            $canReplace = $replacementsUsed < 3;
+        }
+
+        return response()->json([
+            'replacements_used' => $replacementsUsed,
+            'replacements_limit' => 3,
+            'replacements_remaining' => max(0, 3 - $replacementsUsed),
+            'can_replace' => $canReplace,
+            'hours_until_reset' => $hoursUntilReset,
+            'reset_at' => $user->last_resume_replacement_reset_at ? $user->last_resume_replacement_reset_at->toISOString() : null,
+        ]);
+    }
+
+    public function deleteAccount(Request $request)
+    {
+        $user = Auth::user();
+
+        try {
+            // Soft delete the user account (keeps all data but marks account as deleted)
+            $user->delete();
+
+            // Logout the user
+            Auth::logout();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Account deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to delete account', [
+                'error' => $e->getMessage(),
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to delete account',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

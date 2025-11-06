@@ -25,6 +25,61 @@ class ResumeController extends Controller
         $uploadedFiles = [];
         $parserService = new ResumeParserService();
 
+        // Check if this is a replacement (existing resume exists)
+        $existingResumes = $user->uploadedFiles()
+            ->where('file_type', 'resume')
+            ->where('is_active', true)
+            ->get();
+
+        $isReplacement = $existingResumes->count() > 0;
+
+        // If it's a replacement, check the rate limit
+        if ($isReplacement) {
+            // Check if 48 hours have passed since last reset
+            if ($user->last_resume_replacement_reset_at) {
+                $hoursSinceReset = $user->last_resume_replacement_reset_at->diffInHours(now());
+
+                // If 48 hours have passed, reset the counter
+                if ($hoursSinceReset >= 48) {
+                    $user->resume_replacement_count = 0;
+                    $user->last_resume_replacement_reset_at = now();
+                    $user->save();
+                }
+            }
+
+            // Check if user has exceeded the limit
+            if ($user->resume_replacement_count >= 3) {
+                $hoursRemaining = 48 - ($user->last_resume_replacement_reset_at ? $user->last_resume_replacement_reset_at->diffInHours(now()) : 0);
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Resume replacement limit reached',
+                    'message' => "You've reached the limit of 3 resume replacements. Please wait {$hoursRemaining} hours before replacing your resume again.",
+                    'hours_remaining' => $hoursRemaining,
+                    'limit_reached' => true
+                ], 429);
+            }
+        }
+
+        foreach ($existingResumes as $existingResume) {
+            Log::info('Deleting existing resume', [
+                'user_id' => $user->id,
+                'file_id' => $existingResume->id,
+                'file_path' => $existingResume->file_path
+            ]);
+
+            // Delete the file from storage
+            if (Storage::exists($existingResume->file_path)) {
+                Storage::delete($existingResume->file_path);
+            }
+
+            // Delete work experience associated with old resume
+            $user->workExperience()->delete();
+
+            // Delete the database record
+            $existingResume->delete();
+        }
+
         Log::info('About to process files', ['file_count' => count($request->file('files'))]);
 
         foreach ($request->file('files') as $file) {
@@ -58,9 +113,26 @@ class ResumeController extends Controller
             $uploadedFiles[] = $uploadedFile;
         }
 
+        // If this was a replacement, increment the counter
+        if ($isReplacement) {
+            if (!$user->last_resume_replacement_reset_at) {
+                $user->last_resume_replacement_reset_at = now();
+            }
+            $user->resume_replacement_count += 1;
+            $user->save();
+
+            Log::info('Resume replacement count incremented', [
+                'user_id' => $user->id,
+                'count' => $user->resume_replacement_count,
+                'reset_at' => $user->last_resume_replacement_reset_at
+            ]);
+        }
+
         return response()->json([
             'success' => true,
-            'files' => $uploadedFiles
+            'files' => $uploadedFiles,
+            'replaced' => $isReplacement,
+            'replacements_remaining' => 3 - $user->resume_replacement_count
         ]);
     }
 

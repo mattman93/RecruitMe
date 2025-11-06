@@ -181,7 +181,7 @@ export function RoleSearchPreview({ onUploadResume }: RoleSearchPreviewProps) {
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                   <h3 className="text-2xl font-bold text-white mb-1">
-                    {totalMatches}{showApproximate ? '+' : ''} matching role{totalMatches !== 1 ? 's' : ''}
+                    {totalMatches < 100 ? `${totalMatches * 3}+` : `${totalMatches}${showApproximate ? '+' : ''}`} matching role{totalMatches !== 1 ? 's' : ''}
                   </h3>
                   <p style={{ color: 'rgba(255, 255, 255, 0.9)' }}>{message}</p>
                 </div>

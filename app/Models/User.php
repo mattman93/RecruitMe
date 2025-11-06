@@ -4,13 +4,14 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -71,6 +72,7 @@ class User extends Authenticatable
             'last_engagement_at' => 'datetime',
             'last_auto_apply_at' => 'datetime',
             'last_daily_reset_at' => 'datetime',
+            'last_resume_replacement_reset_at' => 'datetime',
         ];
     }
 
@@ -284,5 +286,16 @@ class User extends Authenticatable
             'last_match_email_sent_at' => now(),
             'match_email_count' => $this->match_email_count + 1,
         ]);
+    }
+
+    /**
+     * Send the password reset notification.
+     *
+     * @param  string  $token
+     * @return void
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
     }
 }

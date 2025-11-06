@@ -10,10 +10,11 @@ import { useScrollAnimation } from "./hooks/useScrollAnimation";
 interface LoginProps {
   onLogin: () => void;
   onSwitchToRegister?: () => void;
+  onForgotPassword?: () => void;
   isPrelaunch?: boolean;
 }
 
-export function Login({ onLogin, onSwitchToRegister, isPrelaunch = false }: LoginProps) {
+export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isPrelaunch = false }: LoginProps) {
   const { ref, isVisible } = useScrollAnimation(0.3);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -259,18 +260,21 @@ const handleSubmit = async (e: React.FormEvent) => {
 
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center space-x-2 cursor-pointer">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     className="rounded border-border text-primary focus:ring-primary/20"
                   />
                   <span className="login-text font-medium">Remember me</span>
                 </label>
-                <button
-                  type="button"
-                  className="text-primary hover:text-primary/80 transition-colors"
-                >
-                  Forgot password?
-                </button>
+                {onForgotPassword && (
+                  <button
+                    type="button"
+                    onClick={onForgotPassword}
+                    className="text-primary hover:text-primary/80 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
 
               <Button
