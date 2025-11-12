@@ -100,6 +100,8 @@ export function Register({ onRegister, onSwitchToLogin, initialValues }: Registe
       const data = await response.json();
 
       if (response.ok) {
+        // Set flag for success toast to show in Dashboard
+        localStorage.setItem('registration_success', 'true');
         onRegister();
       } else {
         if (data.errors) {

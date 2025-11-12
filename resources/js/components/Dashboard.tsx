@@ -98,6 +98,8 @@ export function Dashboard() {
   const [userCredits, setUserCredits] = useState(0);
   const [hasSubscription, setHasSubscription] = useState(false);
   const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | null>(null);
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
 
   // Resume replacement limit state
   const [replacementsUsed, setReplacementsUsed] = useState(0);
@@ -119,6 +121,17 @@ export function Dashboard() {
     fetchAccountInfo();
     fetchResumeReplacementStatus();
     fetchMatchedJobsCount();
+  }, []);
+
+  // Check for registration success and show welcome toast
+  useEffect(() => {
+    const registrationSuccess = localStorage.getItem('registration_success');
+    if (registrationSuccess === 'true') {
+      // Show success toast
+      success('Account created! You have 1 month of free Pro access');
+      // Clear the flag
+      localStorage.removeItem('registration_success');
+    }
   }, []);
 
   // Fetch settings when settings or auto-apply tab is opened
@@ -251,6 +264,8 @@ const fetchAccountInfo = async () => {
       setUserCredits(data.credits || 0);
       setHasSubscription(data.has_subscription || false);
       setSubscriptionPlan(data.subscription_plan || null);
+      setSubscriptionEndsAt(data.subscription_ends_at || null);
+      setDaysRemaining(data.days_remaining ?? null);
     }
   } catch (error) {
     console.error('Error fetching account info:', error);
@@ -759,9 +774,10 @@ const fetchMatchedJobsCount = async () => {
         {activeTab === 'auto-apply' && (
           <div className="max-w-4xl mx-auto mt-8">
             <div
-              className="p-8 rounded-xl border border-border"
+              className="p-8 rounded-xl border border-border relative"
               style={{
-                background: 'linear-gradient(to bottom right, #eff6ff, #faf5ff)'
+                background: 'linear-gradient(to bottom right, #eff6ff, #faf5ff)',
+                zIndex: 1
               }}
             >
               {/* Welcome Message */}
@@ -781,6 +797,22 @@ const fetchMatchedJobsCount = async () => {
                   Click enable auto-apply to let us start reaching out to employers for you!
                 </p>
               </div>
+
+              {/* Free Pro Trial Banner */}
+              {subscriptionPlan === 'pro' && daysRemaining !== null && daysRemaining > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-amber-900">
+                        Free Pro Trial - {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining
+                      </p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        Auto-apply and all Pro features are free during your trial period
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Auto-Apply Toggle */}
               <div className="bg-white rounded-lg p-6 mb-6">

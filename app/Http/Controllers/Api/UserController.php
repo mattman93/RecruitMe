@@ -211,11 +211,23 @@ class UserController extends Controller
     {
         $user = Auth::user();
 
+        // Calculate days remaining if subscription exists
+        $daysRemaining = null;
+        if ($user->subscription_ends_at) {
+            $daysRemaining = max(0, floor(now()->diffInDays($user->subscription_ends_at, false)));
+            // diffInDays with false returns negative if past, so we use max(0, ...) to handle expired
+            if ($daysRemaining < 0) {
+                $daysRemaining = 0;
+            }
+        }
+
         return response()->json([
             'credits' => $user->getRemainingCredits(),
             'credits_used' => $user->credits_used,
             'has_subscription' => $user->hasSubscription(),
             'subscription_plan' => $user->getSubscriptionPlan(),
+            'subscription_ends_at' => $user->subscription_ends_at?->toIso8601String(),
+            'days_remaining' => $daysRemaining,
         ]);
     }
 
