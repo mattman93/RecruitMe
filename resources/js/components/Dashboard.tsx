@@ -852,7 +852,7 @@ const fetchMatchedJobsCount = async () => {
               </div>
 
               {/* Settings */}
-              <div className="bg-white rounded-lg p-6">
+              <div className={`bg-white rounded-lg p-6 transition-opacity duration-200 ${autoApplyEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
                 <h3 className="text-foreground font-semibold mb-6">Auto-Apply Settings</h3>
 
                 <div className="space-y-6">
@@ -876,7 +876,7 @@ const fetchMatchedJobsCount = async () => {
                             setMaxApplicationsPerDay(newValue);
                             saveSettings({ max_applications_per_day: newValue });
                           }}
-                          disabled={maxApplicationsPerDay <= 1}
+                          disabled={autoApplyEnabled || maxApplicationsPerDay <= 1}
                         >
                           -
                         </Button>
@@ -891,7 +891,7 @@ const fetchMatchedJobsCount = async () => {
                             setMaxApplicationsPerDay(newValue);
                             saveSettings({ max_applications_per_day: newValue });
                           }}
-                          disabled={maxApplicationsPerDay >= 50}
+                          disabled={autoApplyEnabled || maxApplicationsPerDay >= 50}
                         >
                           +
                         </Button>
@@ -908,7 +908,8 @@ const fetchMatchedJobsCount = async () => {
                         }}
                         onMouseUp={(e) => saveSettings({ max_applications_per_day: Number((e.target as HTMLInputElement).value) })}
                         onTouchEnd={(e) => saveSettings({ max_applications_per_day: Number((e.target as HTMLInputElement).value) })}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                        disabled={autoApplyEnabled}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
                       />
                       <div className="flex justify-between text-xs text-muted-foreground mt-2">
                         <span>1</span>
@@ -931,14 +932,17 @@ const fetchMatchedJobsCount = async () => {
                         <button
                           key={freq}
                           onClick={() => {
-                            setNotificationFrequency(freq === 'real-time' ? 'realtime' : freq as 'realtime' | 'daily' | 'weekly' | 'none');
-                            saveSettings({ notification_frequency: freq === 'real-time' ? 'realtime' : freq });
+                            if (!autoApplyEnabled) {
+                              setNotificationFrequency(freq === 'real-time' ? 'realtime' : freq as 'realtime' | 'daily' | 'weekly' | 'none');
+                              saveSettings({ notification_frequency: freq === 'real-time' ? 'realtime' : freq });
+                            }
                           }}
+                          disabled={autoApplyEnabled}
                           className={`p-4 rounded-lg border-2 transition-all duration-200 ${
                             (notificationFrequency === 'realtime' && freq === 'real-time') || notificationFrequency === freq
                               ? 'border-primary bg-blue-50'
                               : 'border-border hover:border-gray-300 bg-white'
-                          }`}
+                          } ${autoApplyEnabled ? 'cursor-not-allowed' : ''}`}
                         >
                           <div className="font-medium text-foreground capitalize mb-1">
                             {freq === 'real-time' ? 'Real-Time' : freq.charAt(0).toUpperCase() + freq.slice(1)}
