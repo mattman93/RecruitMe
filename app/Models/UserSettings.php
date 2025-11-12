@@ -46,6 +46,12 @@ class UserSettings extends Model
         'max_applications_per_day' => 'integer',
     ];
 
+    protected $attributes = [
+        'auto_apply_frequency' => 'hourly',
+        'notification_frequency' => 'daily',
+        'max_applications_per_day' => 25,
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

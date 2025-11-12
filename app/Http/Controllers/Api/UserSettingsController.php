@@ -100,6 +100,10 @@ class UserSettingsController extends Controller
 
         // Update UserSettings
         $settingsData = $request->except(['timezone', 'match_email_frequency']);
+
+        // Always force auto_apply_frequency to 'hourly'
+        $settingsData['auto_apply_frequency'] = 'hourly';
+
         $settings = UserSettings::updateOrCreate(
             ['user_id' => $user->id],
             $settingsData

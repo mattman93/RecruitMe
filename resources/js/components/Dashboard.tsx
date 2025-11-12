@@ -490,7 +490,7 @@ const fetchMatchedJobsCount = async () => {
         show_to_recruiters: showToRecruiters,
         hide_from_current_employer: hideFromCurrentEmployer,
         auto_apply_enabled: autoApplyEnabled,
-        auto_apply_frequency: autoApplyFrequency,
+        auto_apply_frequency: 'hourly', // Always use hourly frequency
         auto_apply_max_per_period: autoApplyMaxPerPeriod,
         auto_apply_relevance: autoApplyRelevance,
         notification_frequency: notificationFrequency,
@@ -552,7 +552,7 @@ const fetchMatchedJobsCount = async () => {
         show_to_recruiters: showToRecruiters,
         hide_from_current_employer: hideFromCurrentEmployer,
         auto_apply_enabled: autoApplyEnabled,
-        auto_apply_frequency: autoApplyFrequency,
+        auto_apply_frequency: 'hourly', // Always use hourly frequency
         auto_apply_max_per_period: autoApplyMaxPerPeriod,
         auto_apply_relevance: autoApplyRelevance,
         notification_frequency: notificationFrequency,
@@ -1539,21 +1539,6 @@ const fetchMatchedJobsCount = async () => {
                         checked={autoApplyEnabled}
                         onCheckedChange={setAutoApplyEnabled}
                       />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="auto-apply-frequency" className="text-sm font-medium">Application Frequency</Label>
-                      <p className="text-sm text-muted-foreground mb-2">How often should we apply to jobs?</p>
-                      <select
-                        id="auto-apply-frequency"
-                        value={autoApplyFrequency}
-                        onChange={(e) => setAutoApplyFrequency(e.target.value as 'hourly' | 'daily' | 'weekly')}
-                        className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="hourly">Hourly (2-3 apps/hour, 8am-7pm, max 25/day)</option>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                      </select>
                     </div>
 
                     <div>
