@@ -48,13 +48,19 @@ class AuthController extends Controller
     {
         try {
             $request->validate([
-                'name' => 'required|string|max:255',
+                'first_name' => 'required|string|max:255',
+                'last_name' => 'required|string|max:255',
                 'email' => 'required|string|email|max:255|unique:users',
                 'password' => 'required|string|min:8|confirmed',
             ]);
 
+            // Construct full name from first and last name
+            $fullName = trim($request->first_name . ' ' . $request->last_name);
+
             $user = User::create([
-                'name' => $request->name,
+                'name' => $fullName,
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
                 'subscription_plan' => 'pro',

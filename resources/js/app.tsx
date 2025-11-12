@@ -47,7 +47,11 @@ export default function App() {
   const [hasBetaAccess, setHasBetaAccess] = useState<boolean>(false);
   const [guestPreviewData, setGuestPreviewData] = useState<GuestPreviewData | null>(null);
   const [showGuestPreview, setShowGuestPreview] = useState(false);
-  const [registerInitialValues, setRegisterInitialValues] = useState<{name?: string; email?: string}>({});
+  const [registerInitialValues, setRegisterInitialValues] = useState<{
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+  }>({});
   const [resetPasswordToken, setResetPasswordToken] = useState<string>('');
   const [resetPasswordEmail, setResetPasswordEmail] = useState<string>('');
 
@@ -302,13 +306,32 @@ export default function App() {
     setShowGuestPreview(true);
   };
 
+  const handleGuestUploadForRegistration = (data: { first_name?: string; last_name?: string; email?: string }) => {
+    // Set initial values for registration form
+    setRegisterInitialValues({
+      first_name: data.first_name || undefined,
+      last_name: data.last_name || undefined,
+      email: data.email || undefined,
+    });
+
+    // Switch to register view
+    setAppState('register');
+  };
+
   const handleGuestRegister = () => {
     setShowGuestPreview(false);
 
     // Extract name and email from guest preview data to autofill registration
     if (guestPreviewData?.parsedData) {
+      // Parse name into first/last if available
+      const fullName = guestPreviewData.parsedData.name || '';
+      const nameParts = fullName.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
       setRegisterInitialValues({
-        name: guestPreviewData.parsedData.name || '',
+        first_name: firstName,
+        last_name: lastName,
         email: guestPreviewData.parsedData.email || ''
       });
     }
@@ -451,6 +474,7 @@ export default function App() {
             onDashboard={handleGoDashboard}
             isAuthenticated={isUserAuthenticated}
             onGuestUploadComplete={handleGuestUploadComplete}
+            onGuestUploadForRegistration={handleGuestUploadForRegistration}
           />
           <ROICalculator />
           <ProFeatureShowcase />

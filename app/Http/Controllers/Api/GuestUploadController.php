@@ -80,19 +80,30 @@ class GuestUploadController extends Controller
             }
         }
 
-        // Store data in session for later account creation
+        // Store data in session for sign-up pre-filling
         session([
             'guest_uploads' => $uploadedFiles,
             'guest_parsed_resume' => $parsedData,
             'guest_matched_jobs' => $matchedJobs,
         ]);
 
+        // Parse first/last name from full name
+        $firstName = null;
+        $lastName = null;
+        if ($parsedData && !empty($parsedData['full_name'])) {
+            $nameParts = explode(' ', trim($parsedData['full_name']), 2);
+            $firstName = $nameParts[0] ?? null;
+            $lastName = $nameParts[1] ?? null;
+        }
+
         return response()->json([
             'success' => true,
+            'redirect_to_signup' => true, // Always redirect to sign-up after upload
             'files' => $uploadedFiles,
             'session_id' => $sessionId,
             'parsed_data' => $parsedData ? [
-                'name' => $parsedData['full_name'] ?? null,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
                 'email' => $parsedData['email'] ?? null,
                 'skills_count' => count($parsedData['technical_skills'] ?? []),
                 'experience_years' => $parsedData['years_of_experience'] ?? 0,
@@ -427,7 +438,7 @@ class GuestUploadController extends Controller
     public function preview($sessionId)
     {
         $files = Storage::files("guest-uploads/{$sessionId}");
-        
+
         return response()->json([
             'files' => $files,
             'session_uploads' => session('guest_uploads', [])

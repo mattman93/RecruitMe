@@ -11,7 +11,8 @@ interface RegisterProps {
   onRegister: () => void;
   onSwitchToLogin: () => void;
   initialValues?: {
-    name?: string;
+    first_name?: string;
+    last_name?: string;
     email?: string;
   };
 }
@@ -19,7 +20,8 @@ interface RegisterProps {
 export function Register({ onRegister, onSwitchToLogin, initialValues }: RegisterProps) {
   const { ref, isVisible } = useScrollAnimation(0.3);
   const [formData, setFormData] = useState({
-    name: initialValues?.name || "",
+    first_name: initialValues?.first_name || "",
+    last_name: initialValues?.last_name || "",
     email: initialValues?.email || "",
     password: "",
     confirmPassword: ""
@@ -32,8 +34,12 @@ export function Register({ onRegister, onSwitchToLogin, initialValues }: Registe
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = "Name is required";
+    if (!formData.first_name.trim()) {
+      newErrors.first_name = "First name is required";
+    }
+
+    if (!formData.last_name.trim()) {
+      newErrors.last_name = "Last name is required";
     }
 
     if (!formData.email.trim()) {
@@ -83,7 +89,8 @@ export function Register({ onRegister, onSwitchToLogin, initialValues }: Registe
           'X-CSRF-TOKEN': token,
         },
         body: JSON.stringify({
-          name: formData.name,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
           email: formData.email,
           password: formData.password,
           password_confirmation: formData.confirmPassword,
@@ -191,23 +198,44 @@ export function Register({ onRegister, onSwitchToLogin, initialValues }: Registe
             {/* Registration Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="register-text">Full Name</Label>
+                <Label htmlFor="first_name" className="register-text">First Name</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    id="name"
+                    id="first_name"
                     type="text"
-                    placeholder="Enter your full name"
-                    value={formData.name}
-                    onChange={handleInputChange('name')}
+                    placeholder="Enter your first name"
+                    value={formData.first_name}
+                    onChange={handleInputChange('first_name')}
                     className={`pl-10 h-12 bg-input-background border-border focus:border-primary focus:ring-primary/20 ${
-                      errors.name ? 'border-red-500' : ''
+                      errors.first_name ? 'border-red-500' : ''
                     }`}
                     required
                   />
                 </div>
-                {errors.name && (
-                  <p className="text-sm text-red-500">{errors.name}</p>
+                {errors.first_name && (
+                  <p className="text-sm text-red-500">{errors.first_name}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="last_name" className="register-text">Last Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="last_name"
+                    type="text"
+                    placeholder="Enter your last name"
+                    value={formData.last_name}
+                    onChange={handleInputChange('last_name')}
+                    className={`pl-10 h-12 bg-input-background border-border focus:border-primary focus:ring-primary/20 ${
+                      errors.last_name ? 'border-red-500' : ''
+                    }`}
+                    required
+                  />
+                </div>
+                {errors.last_name && (
+                  <p className="text-sm text-red-500">{errors.last_name}</p>
                 )}
               </div>
 

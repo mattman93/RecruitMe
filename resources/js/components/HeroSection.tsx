@@ -21,13 +21,14 @@ interface HeroSectionProps {
   onDashboard?: () => void;
   isAuthenticated?: boolean;
   onGuestUploadComplete?: (data: GuestUploadData) => void;
+  onGuestUploadForRegistration?: (data: { first_name?: string; last_name?: string; email?: string }) => void;
 }
 
-export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplete }: HeroSectionProps) {
+export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplete, onGuestUploadForRegistration }: HeroSectionProps) {
   const { toasts, success, error: showError, info, removeToast } = useToast();
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [viewMode, setViewMode] = useState<'role-search' | 'upload'>('role-search');
+  const [viewMode, setViewMode] = useState<'role-search' | 'upload'>('upload');
 
   const handleSwitchToUpload = () => {
     setViewMode('upload');
@@ -92,19 +93,19 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
       // This improves perceived value (instant feels cheap)
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      // Store session ID in localStorage
+      // Store session ID in localStorage for registration flow
       if (data.session_id) {
         localStorage.setItem('guest_session_id', data.session_id);
       }
 
-      // Trigger preview modal with full data
-      if (onGuestUploadComplete && data.session_id) {
-        onGuestUploadComplete({
-          sessionId: data.session_id,
-          matches: data.preview_matches || [],
-          totalMatches: data.total_matches || 0,
-          parsedData: data.parsed_data || null,
+      // Trigger registration flow with pre-filled data
+      if (data.redirect_to_signup && data.parsed_data && onGuestUploadForRegistration) {
+        onGuestUploadForRegistration({
+          first_name: data.parsed_data.first_name || undefined,
+          last_name: data.parsed_data.last_name || undefined,
+          email: data.parsed_data.email || undefined,
         });
+        return;
       }
     } catch (error) {
       console.error('Guest upload failed:', error);
@@ -172,18 +173,6 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
             {/* View Mode Toggle */}
             <div className="flex justify-center gap-2 mb-8">
               <button
-                onClick={() => setViewMode('role-search')}
-                className={`
-                  px-6 py-3 rounded-lg font-semibold transition-all duration-300
-                  ${viewMode === 'role-search'
-                    ? 'bg-white text-indigo-600 shadow-lg'
-                    : 'bg-white/10 text-white hover:bg-white/20'
-                  }
-                `}
-              >
-                Search by Role
-              </button>
-              <button
                 onClick={() => setViewMode('upload')}
                 className={`
                   px-6 py-3 rounded-lg font-semibold transition-all duration-300
@@ -194,6 +183,18 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
                 `}
               >
                 Upload Resume
+              </button>
+              <button
+                onClick={() => setViewMode('role-search')}
+                className={`
+                  px-6 py-3 rounded-lg font-semibold transition-all duration-300
+                  ${viewMode === 'role-search'
+                    ? 'bg-white text-indigo-600 shadow-lg'
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                  }
+                `}
+              >
+                Search by Role
               </button>
             </div>
 
