@@ -55,4 +55,11 @@ return [
         ],
     ],
 
+    'ghost' => [
+        'api_url' => env('GHOST_API_URL', 'http://ghost:2368'),
+        'content_api_key' => env('GHOST_CONTENT_API_KEY'),
+        'admin_api_key' => env('GHOST_ADMIN_API_KEY'),
+        'admin_url' => env('GHOST_ADMIN_URL', 'http://localhost:2368/ghost'),
+    ],
+
 ];

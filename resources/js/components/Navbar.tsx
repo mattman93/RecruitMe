@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-import { Menu, Shield } from "lucide-react";
+import { Menu, Shield, BookOpen, Edit } from "lucide-react";
 
 interface NavbarProps {
   isAuthenticated?: boolean;
@@ -11,9 +11,10 @@ interface NavbarProps {
   onDashboard?: () => void;
   onEnterprise?: () => void;
   onPricing?: () => void;
+  onBlog?: () => void;
 }
 
-export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard, onEnterprise, onPricing }: NavbarProps) {
+export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard, onEnterprise, onPricing, onBlog }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -43,6 +44,11 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
   const handleAdminDashboard = () => {
     window.location.href = '/admin/data-ingestion';
   };
+
+  const handleBlogAdmin = () => {
+    window.location.href = '/blog-admin';
+  };
+
   return (
     <nav className="w-full bg-white border-b border-[#E6E9ED] px-6 py-4">
       <div className="flex items-center justify-between">
@@ -55,6 +61,13 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
 
         {/* Right side navigation */}
         <div className="flex items-center gap-4">
+          <button
+            onClick={onBlog}
+            className="text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors"
+          >
+            Blog
+          </button>
+
           <button
             onClick={onPricing}
             className="text-[#4A4A4A] hover:text-[#1A1A1A] transition-colors"
@@ -130,9 +143,30 @@ export function Navbar({ isAuthenticated, onLogout, onLogin, onHome, onDashboard
                         <Shield className="h-4 w-4 text-purple-600" />
                         admin
                       </button>
+                      <button
+                        onClick={() => {
+                          handleBlogAdmin();
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <Edit className="h-4 w-4 text-blue-600" />
+                        blog admin
+                      </button>
                       <div className="border-t border-gray-200 my-2" />
                     </>
                   )}
+
+                  <button
+                    onClick={() => {
+                      onBlog?.();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    blog
+                  </button>
 
                   <button
                     onClick={() => {

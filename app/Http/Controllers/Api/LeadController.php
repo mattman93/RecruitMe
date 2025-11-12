@@ -26,7 +26,7 @@ class LeadController extends Controller
     {
         $user = Auth::user();
         $matchRelevant = $request->boolean('relevant', false);
-        $limit = $request->integer('limit', 20);
+        $limit = $request->integer('limit', 50);
 
         // Try to get from cache if user is authenticated
         if ($user && $this->leadCacheService->isAvailable()) {
@@ -119,7 +119,7 @@ class LeadController extends Controller
             ], 401);
         }
 
-        $limit = $request->integer('limit', 10);
+        $limit = $request->integer('limit', 50);
 
         // Try to get from cache
         if ($this->leadCacheService->isAvailable()) {
@@ -255,7 +255,7 @@ class LeadController extends Controller
         ]);
 
         $role = $request->input('role');
-        $limit = $request->integer('limit', 10);
+        $limit = $request->integer('limit', 50);
         $hoursAgo = 72; // Last 3 days
 
         // Build query for role-based search

@@ -664,7 +664,7 @@ const fetchOAuthStatus = async () => {
         {activeTab === 'matches' && (
           <>
           {/* Upgrade Banner for non-Pro users */}
-          {hasSubscription && subscriptionPlan !== 'pro' && (
+          {(!hasSubscription || subscriptionPlan !== 'pro') && (
             <div
               className="mb-6 p-3 rounded-lg border text-center"
               style={{

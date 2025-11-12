@@ -284,6 +284,10 @@ export default function App() {
     window.location.href = '/subscribe';
   };
 
+  const handleGoBlog = () => {
+    window.location.href = '/blog';
+  };
+
   const handleShowLogin = () => {
     if (isPrelaunch && !hasBetaAccess) {
       setAppState('contact-us');
@@ -328,7 +332,7 @@ export default function App() {
   if (appState === 'login') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-md space-y-6">
             <div className="text-center">
@@ -355,7 +359,7 @@ export default function App() {
   if (appState === 'forgot-password') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <ForgotPassword onBackToLogin={isUserAuthenticated ? handleGoDashboard : handleSwitchToLogin} />
       </div>
     );
@@ -365,7 +369,7 @@ export default function App() {
   if (appState === 'reset-password') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <ResetPassword
           token={resetPasswordToken}
           email={resetPasswordEmail}
@@ -406,7 +410,7 @@ export default function App() {
 
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={false} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <Register onRegister={handleRegister} onSwitchToLogin={handleSwitchToLogin} initialValues={registerInitialValues} />
       </div>
     );
@@ -416,7 +420,7 @@ export default function App() {
   if (appState === 'upload') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full">
             <div className="text-center mb-8">
@@ -442,7 +446,7 @@ export default function App() {
   if (appState === 'guest') {
       return (
         <div className="min-h-screen bg-white">
-          <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+          <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
           <HeroSection
             onDashboard={handleGoDashboard}
             isAuthenticated={isUserAuthenticated}
@@ -476,7 +480,7 @@ export default function App() {
     if (appState === 'enterprise') {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <Enterprise />
         <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
       </div>
@@ -523,7 +527,7 @@ export default function App() {
   if (appState === 'admin-data-ingestion') {
     return (
       <div className="min-h-screen flex flex-col bg-white">
-        <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <DataIngestionStats />
       </div>
     );
@@ -533,7 +537,7 @@ export default function App() {
   if (appState === 'privacy') {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <PrivacyPolicy />
         <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
       </div>
@@ -544,7 +548,7 @@ export default function App() {
   if (appState === 'terms') {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+        <Navbar isAuthenticated={isUserAuthenticated} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
         <TermsOfService />
         <Footer onContactUs={() => setAppState('contact-us')} isPrelaunch={isPrelaunch} />
       </div>
@@ -576,7 +580,7 @@ export default function App() {
   // Authenticated state
   return (
     <div className="min-h-screen flex flex-col bg-white">
-      <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} />
+      <Navbar isAuthenticated={true} onLogout={handleLogout} onLogin={handleShowLogin} onHome={handleGoHome} onDashboard={handleGoDashboard} onEnterprise={handleGoEnterprise} onPricing={handleGoPricing} onBlog={handleGoBlog} />
       <Dashboard />
     </div>
   );

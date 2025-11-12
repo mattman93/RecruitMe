@@ -4,16 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-	<meta name="google-site-verification" content="PuVtg7DjUVnaawSVmFhOHt9Gjzat-xKOgnv0qvzAE7A" />
-        @if(config('app.env') === 'local')
-        <script type="module">
-                import RefreshRuntime from 'http://localhost:5174/@react-refresh';
-                RefreshRuntime.injectIntoGlobalHook(window);
-                window.$RefreshReg$ = () => {};
-                window.$RefreshSig$ = () => (type) => type;
-                window.__vite_plugin_react_preamble_installed__ = true;
-        </script>
-        @endif
+        <meta name="google-site-verification" content="PuVtg7DjUVnaawSVmFhOHt9Gjzat-xKOgnv0qvzAE7A" />
 
         {{-- Inline style to set the HTML background color --}}
         <style>
@@ -44,9 +35,9 @@
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
         @vite(['resources/js/index.css', 'resources/js/main.tsx'])
-        
+        @inertiaHead
     </head>
     <body class="font-sans antialiased">
-      <div id="root"></div>
+      @inertia
     </body>
 </html>

@@ -40,6 +40,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init-ghost.sql:/docker-entrypoint-initdb.d/init-ghost.sql
     networks:
       - recruit-me-network
 
@@ -68,9 +69,66 @@ services:
       - recruit-me-network
     restart: "no"
 
+  queue:
+    build: .
+    container_name: recruit-me-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: bash -c "sleep 35 && php artisan queue:work --sleep=3 --tries=3 --timeout=90"
+    environment:
+      - APP_NAME=AppliFlow
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=recruit_me
+      - DB_USERNAME=laravel
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - db
+      - redis
+      - app
+    networks:
+      - recruit-me-network
+
+  ghost:
+    image: ghost:5-alpine
+    container_name: appliflow-ghost
+    restart: unless-stopped
+    ports:
+      - "2368:2368"
+    environment:
+      # URL configuration - production URL
+      url: ${GHOST_URL:-http://localhost:2368}
+      # Database configuration - using MySQL
+      database__client: mysql
+      database__connection__host: db
+      database__connection__user: ghost_user
+      database__connection__password: ghost_password
+      database__connection__database: ghost_db
+      # Mail configuration
+      mail__transport: ${MAIL_TRANSPORT:-SMTP}
+      mail__from: ${MAIL_FROM_ADDRESS:-noreply@appliflow.ai}
+      mail__options__service: ${MAIL_SERVICE:-}
+      mail__options__host: ${MAIL_HOST:-}
+      mail__options__port: ${MAIL_PORT:-}
+      mail__options__auth__user: ${MAIL_USERNAME:-}
+      mail__options__auth__pass: ${MAIL_PASSWORD:-}
+    volumes:
+      - ghost_data:/var/lib/ghost/content
+    depends_on:
+      - db
+    networks:
+      - recruit-me-network
+
 volumes:
   mysql_data:
   redis_data:
+  ghost_data:
 
 networks:
   recruit-me-network:

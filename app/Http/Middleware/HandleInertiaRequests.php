@@ -18,6 +18,22 @@ class HandleInertiaRequests extends Middleware
     protected $rootView = 'app';
 
     /**
+     * Determine the root view for the request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return string
+     */
+    public function rootView(Request $request)
+    {
+        // Use inertia.blade.php for blog pages
+        if (str_starts_with($request->path(), 'blog')) {
+            return 'inertia';
+        }
+
+        return $this->rootView;
+    }
+
+    /**
      * Determines the current asset version.
      *
      * @see https://inertiajs.com/asset-versioning

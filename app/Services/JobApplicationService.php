@@ -919,7 +919,6 @@ class JobApplicationService
                 $recipients = [['email' => 'mattcieslak93@gmail.com', 'type' => 'Test Email']];
                 Log::info("Gmail API test mode enabled - sending to test email only", [
                     'user_id' => $user->id,
-                    'test_email' => 'mattcieslak93@gmail.com',
                     'discovered_contacts' => count($contacts)
                 ]);
             } else {
@@ -968,8 +967,6 @@ class JobApplicationService
                 Log::info("Gmail API emails sent successfully", [
                     'user_id' => $user->id,
                     'emails_sent' => $emailsSent,
-                    'test_email_mode' => env('TEST_EMAIL_MODE', true),
-                    'recipients' => env('TEST_EMAIL_MODE', true) ? ['mattcieslak93@gmail.com'] : array_column($contacts, 'email'),
                     'total_contacts' => count($contacts)
                 ]);
             }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\GoogleOAuthController;
 use App\Http\Controllers\ResumeController;
 use App\Http\Controllers\JobProxyController;
+use App\Http\Controllers\BlogController;
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
@@ -148,6 +149,13 @@ Route::get('/privacy', function () {
 Route::get('/terms', function () {
     return Inertia::render('Welcome'); // Load the React SPA which will handle the terms state
 })->name('terms');
+
+// Blog routes
+Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
+Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
+Route::get('/blog-admin', [BlogController::class, 'admin'])
+    ->middleware(['auth'])
+    ->name('blog.admin');
 
 // Admin routes - Super Admin only
 Route::get('/admin/data-ingestion', function () {

@@ -17,11 +17,9 @@ class GoogleOAuthController extends Controller
     public function redirectToGoogle()
     {
         return Socialite::driver('google')
-            ->scopes(['openid', 'profile', 'email', 'https://www.googleapis.com/auth/gmail.send'])
+            ->scopes(['openid', 'profile', 'email'])
             ->with([
-                'prompt' => 'consent', // Changed from 'select_account' to force consent screen
-                'access_type' => 'offline', // Request refresh token
-                'include_granted_scopes' => 'true' // Include previously granted scopes
+                'prompt' => 'select_account', // Let users choose their account
             ])
             ->redirect();
     }
@@ -100,7 +98,7 @@ class GoogleOAuthController extends Controller
             'access_token' => $googleUser->token,
             'refresh_token' => $googleUser->refreshToken,
             'expires_at' => $googleUser->expiresIn ? now()->addSeconds($googleUser->expiresIn) : null,
-            'scopes' => json_encode(['https://www.googleapis.com/auth/gmail.send', 'profile', 'email']),
+            'scopes' => json_encode(['profile', 'email']),
         ];
 
         // For now, log the tokens (in production, store in database)
@@ -109,7 +107,7 @@ class GoogleOAuthController extends Controller
             'has_access_token' => !empty($googleUser->token),
             'has_refresh_token' => !empty($googleUser->refreshToken),
             'expires_in' => $googleUser->expiresIn,
-            'scopes' => 'gmail.send,profile,email'
+            'scopes' => 'profile,email'
         ]);
 
         // Store tokens in database using DB facade (workaround for Eloquent issue)

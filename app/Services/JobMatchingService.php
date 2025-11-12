@@ -24,22 +24,26 @@ class JobMatchingService
             return collect();
         }
 
+        // Ensure minimum of 25 jobs are returned
+        $minJobs = 25;
+        $targetLimit = max($limit, $minJobs);
+
         // Get user's parsed resume and work experience
         $parsedResume = ParsedResume::where('user_id', $userId)->latest()->first();
         $workExperience = UserWork::where('user_id', $userId)->get();
 
         // Choose matching strategy based on available data
         if ($parsedResume && !empty($parsedResume->technical_skills)) {
-            return $this->skillsBasedMatching($parsedResume, $workExperience, $limit);
+            return $this->skillsBasedMatching($parsedResume, $workExperience, $targetLimit, $minJobs);
         } else {
-            return $this->experienceBasedMatching($workExperience, $limit);
+            return $this->experienceBasedMatching($workExperience, $targetLimit, $minJobs);
         }
     }
 
     /**
      * Skills-based matching when technical skills are available.
      */
-    protected function skillsBasedMatching(ParsedResume $parsedResume, Collection $workExperience, int $limit): Collection
+    protected function skillsBasedMatching(ParsedResume $parsedResume, Collection $workExperience, int $limit, int $minJobs = 25): Collection
     {
         $userSkills = array_map('strtolower', $parsedResume->technical_skills ?? []);
         $jobTitles = $workExperience->pluck('job_title')->map('strtolower')->toArray();
@@ -99,7 +103,7 @@ class JobMatchingService
         $this->applyUserPreferenceFilters($mainQuery, $parsedResume->user_id);
 
         $mainQuery->orderBy('created_at', 'desc') // Process newest jobs first
-            ->chunk($chunkSize, function ($jobs) use ($userSkills, $jobTitles, $parsedResume, &$relevantJobs, $limit, &$processedCount, $maxJobs) {
+            ->chunk($chunkSize, function ($jobs) use ($userSkills, $jobTitles, $parsedResume, &$relevantJobs, $limit, &$processedCount, $maxJobs, $minJobs) {
                 foreach ($jobs as $job) {
                     $processedCount++;
                     
@@ -109,14 +113,16 @@ class JobMatchingService
                     
                     $job->relevance_score = $skillScore + $titleScore + $categoryScore + $job->experience_score;
                     $job->skill_matches = $this->getMatchingSkills($job, $userSkills);
-                    
-                    // Only keep jobs with decent relevance scores
-                    if ($job->relevance_score >= 15) {
+
+                    // Dynamically adjust threshold to ensure we get minimum jobs
+                    $threshold = $relevantJobs->count() < $minJobs ? 5 : 15;
+
+                    if ($job->relevance_score >= $threshold) {
                         $relevantJobs->push($job);
                     }
-                    
-                    // Stop if we've processed enough jobs (keep collecting matches until we hit max)
-                    if ($processedCount >= $maxJobs) {
+
+                    // Stop if we have enough relevant jobs
+                    if ($relevantJobs->count() >= $limit * 2 || $processedCount >= $maxJobs) {
                         return false; // Break out of chunk processing
                     }
                 }
@@ -126,6 +132,26 @@ class JobMatchingService
             ->sortByDesc('relevance_score')
             ->take($limit);
 
+        // If we still don't have enough jobs, get more with looser criteria
+        if ($jobs->count() < $minJobs) {
+            $additionalNeeded = $minJobs - $jobs->count();
+            $existingIds = $jobs->pluck('id')->toArray();
+
+            $additionalJobs = Lead::where('is_active', true)
+                ->whereNotIn('id', array_merge($appliedLeadIds, $existingIds))
+                ->orderBy('created_at', 'desc')
+                ->limit($additionalNeeded)
+                ->get()
+                ->map(function($job) {
+                    $job->relevance_score = 5; // Low score for fallback jobs
+                    $job->skill_matches = [];
+                    $job->experience_score = 0;
+                    return $job;
+                });
+
+            $jobs = $jobs->concat($additionalJobs)->sortByDesc('relevance_score')->values();
+        }
+
         // Store estimated total potential matches for pagination display
         $jobs->total_potential_matches = $estimatedMatches;
 
@@ -133,6 +159,7 @@ class JobMatchingService
             'user_skills_count' => count($userSkills),
             'top_score' => $jobs->first()?->relevance_score ?? 0,
             'total_potential_matches' => $jobs->total_potential_matches,
+            'min_required' => $minJobs,
         ]);
 
         return $jobs;
@@ -141,10 +168,11 @@ class JobMatchingService
     /**
      * Experience-based matching when no skills are available.
      */
-    protected function experienceBasedMatching(Collection $workExperience, int $limit): Collection
+    protected function experienceBasedMatching(Collection $workExperience, int $limit, int $minJobs = 25): Collection
     {
         if ($workExperience->isEmpty()) {
-            return collect();
+            // No work experience - return latest jobs
+            return $this->getFallbackJobs($minJobs);
         }
 
         // Extract keywords from work experience
@@ -215,24 +243,26 @@ class JobMatchingService
         }
 
         $mainQuery->orderBy('created_at', 'desc') // Process newest jobs first
-            ->chunk($chunkSize, function ($jobs) use ($keywords, $jobTitles, &$relevantJobs, $limit, &$processedCount, $maxJobs) {
+            ->chunk($chunkSize, function ($jobs) use ($keywords, $jobTitles, &$relevantJobs, $limit, &$processedCount, $maxJobs, $minJobs) {
                 foreach ($jobs as $job) {
                     $processedCount++;
                     
                     $keywordScore = $this->calculateKeywordScore($job, $keywords);
                     $titleScore = $this->calculateTitleScore($job, $jobTitles);
                     $categoryScore = $this->calculateCategoryScore($job, $jobTitles);
-                    
+
                     $job->relevance_score = $keywordScore + $titleScore + $categoryScore + $job->experience_score;
                     $job->keyword_matches = $this->getMatchingKeywords($job, $keywords);
-                    
-                    // Only keep jobs with decent relevance scores
-                    if ($job->relevance_score >= 20) {
+
+                    // Dynamically adjust threshold to ensure we get minimum jobs
+                    $threshold = $relevantJobs->count() < $minJobs ? 5 : 20;
+
+                    if ($job->relevance_score >= $threshold) {
                         $relevantJobs->push($job);
                     }
-                    
-                    // Stop if we've processed enough jobs (keep collecting matches until we hit max)
-                    if ($processedCount >= $maxJobs) {
+
+                    // Stop if we have enough relevant jobs
+                    if ($relevantJobs->count() >= $limit * 2 || $processedCount >= $maxJobs) {
                         return false; // Break out of chunk processing
                     }
                 }
@@ -242,6 +272,26 @@ class JobMatchingService
             ->sortByDesc('relevance_score')
             ->take($limit);
 
+        // If we still don't have enough jobs, get more with looser criteria
+        if ($jobs->count() < $minJobs) {
+            $additionalNeeded = $minJobs - $jobs->count();
+            $existingIds = $jobs->pluck('id')->toArray();
+
+            $additionalJobs = Lead::where('is_active', true)
+                ->whereNotIn('id', array_merge($appliedLeadIds, $existingIds))
+                ->orderBy('created_at', 'desc')
+                ->limit($additionalNeeded)
+                ->get()
+                ->map(function($job) {
+                    $job->relevance_score = 5; // Low score for fallback jobs
+                    $job->keyword_matches = [];
+                    $job->experience_score = 0;
+                    return $job;
+                });
+
+            $jobs = $jobs->concat($additionalJobs)->sortByDesc('relevance_score')->values();
+        }
+
         // Store estimated total potential matches for pagination display
         $jobs->total_potential_matches = $estimatedMatches;
 
@@ -250,6 +300,7 @@ class JobMatchingService
             'estimated_experience' => $estimatedExperience,
             'top_score' => $jobs->first()?->relevance_score ?? 0,
             'total_potential_matches' => $jobs->total_potential_matches,
+            'min_required' => $minJobs,
         ]);
 
         return $jobs;
@@ -877,5 +928,28 @@ class JobMatchingService
             'has_employment_type_filter' => (bool) $settings->employment_types,
             'has_work_arrangement_filter' => (bool) $settings->work_arrangement,
         ]);
+    }
+
+    /**
+     * Get fallback jobs when no matches are found.
+     */
+    protected function getFallbackJobs(int $limit, array $excludeIds = []): Collection
+    {
+        $jobs = Lead::where('is_active', true)
+            ->whereNotIn('id', $excludeIds)
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function($job) {
+                $job->relevance_score = 5; // Low score for fallback jobs
+                $job->skill_matches = [];
+                $job->keyword_matches = [];
+                $job->experience_score = 0;
+                return $job;
+            });
+
+        $jobs->total_potential_matches = $jobs->count();
+
+        return $jobs;
     }
 }

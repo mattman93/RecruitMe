@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use OpenAI\Laravel\Facades\OpenAI;
 use Smalot\PdfParser\Parser as PdfParser;
+use PhpOffice\PhpWord\IOFactory;
 
 class ResumeParserService
 {
@@ -151,7 +152,7 @@ class ResumeParserService
                 return file_get_contents($fullPath);
             case 'doc':
             case 'docx':
-                throw new \Exception('Word document parsing not yet implemented. Please upload PDF or TXT files.');
+                return $this->extractTextFromStoredWord($fullPath);
             default:
                 throw new \Exception("Unsupported file type: {$extension}");
         }
@@ -205,6 +206,51 @@ class ResumeParserService
             // Return a simple message instead of throwing an exception
             // This allows the upload to succeed even if parsing fails
             return "PDF parsing failed. Please manually add your work experience to your profile.";
+        }
+    }
+
+    /**
+     * Extract text from a stored Word document.
+     */
+    protected function extractTextFromStoredWord(string $fullPath): string
+    {
+        try {
+            Log::info('Attempting to parse Word document with PhpWord', ['path' => $fullPath, 'exists' => file_exists($fullPath)]);
+
+            $phpWord = IOFactory::load($fullPath);
+            $text = '';
+
+            foreach ($phpWord->getSections() as $section) {
+                $elements = $section->getElements();
+                foreach ($elements as $element) {
+                    if (method_exists($element, 'getText')) {
+                        $text .= $element->getText() . "\n";
+                    } elseif (method_exists($element, 'getElements')) {
+                        // Handle containers like TextRun
+                        foreach ($element->getElements() as $childElement) {
+                            if (method_exists($childElement, 'getText')) {
+                                $text .= $childElement->getText();
+                            }
+                        }
+                        $text .= "\n";
+                    }
+                }
+            }
+
+            $text = trim($text);
+            Log::info('Word document parsing successful', ['text_length' => strlen($text)]);
+
+            return $text;
+        } catch (\Exception $e) {
+            Log::error('Failed to parse Word document', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'path' => $fullPath
+            ]);
+
+            // Return a simple message instead of throwing an exception
+            return "Word document parsing failed. Please manually add your work experience to your profile.";
         }
     }
 
@@ -264,9 +310,35 @@ class ResumeParserService
      */
     protected function extractTextFromWord(UploadedFile $file): string
     {
-        // For now, we'll just return a placeholder
-        // You can implement PHPWord parsing if needed
-        throw new \Exception('Word document parsing not yet implemented. Please upload PDF or TXT files.');
+        try {
+            $phpWord = IOFactory::load($file->getRealPath());
+            $text = '';
+
+            foreach ($phpWord->getSections() as $section) {
+                $elements = $section->getElements();
+                foreach ($elements as $element) {
+                    if (method_exists($element, 'getText')) {
+                        $text .= $element->getText() . "\n";
+                    } elseif (method_exists($element, 'getElements')) {
+                        // Handle containers like TextRun
+                        foreach ($element->getElements() as $childElement) {
+                            if (method_exists($childElement, 'getText')) {
+                                $text .= $childElement->getText();
+                            }
+                        }
+                        $text .= "\n";
+                    }
+                }
+            }
+
+            return trim($text);
+        } catch (\Exception $e) {
+            Log::error('Failed to parse Word document', [
+                'error' => $e->getMessage(),
+                'file' => $file->getClientOriginalName()
+            ]);
+            throw new \Exception('Failed to parse Word document: ' . $e->getMessage());
+        }
     }
 
     /**
