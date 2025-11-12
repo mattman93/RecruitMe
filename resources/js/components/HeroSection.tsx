@@ -3,6 +3,8 @@ import { Button } from "./ui/button";
 import { LavaLampBackground } from "./LavaLampBackground";
 import { RoleSearchPreview } from "./RoleSearchPreview";
 import { Lock, Shield, Clock } from "lucide-react";
+import { useToast } from "./hooks/useToast";
+import { ToastContainer } from "./Toast";
 
 interface GuestUploadData {
   sessionId: string;
@@ -22,6 +24,7 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplete }: HeroSectionProps) {
+  const { toasts, success, error: showError, info, removeToast } = useToast();
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [viewMode, setViewMode] = useState<'role-search' | 'upload'>('role-search');
@@ -105,7 +108,7 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
       }
     } catch (error) {
       console.error('Guest upload failed:', error);
-      alert('Upload failed. Please try again.');
+      showError('Upload failed. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -129,6 +132,7 @@ export function HeroSection({ onDashboard, isAuthenticated, onGuestUploadComplet
 
   return (
     <section className="w-full min-h-screen relative overflow-hidden">
+      <ToastContainer toasts={toasts} onClose={removeToast} />
       {/* Animated Lava Lamp Background */}
       <LavaLampBackground />
 

@@ -57,6 +57,9 @@ class AuthController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
+                'subscription_plan' => 'pro',
+                'subscription_status' => 'active',
+                'subscription_ends_at' => now()->addMonth(),
             ]);
 
             event(new Registered($user));

@@ -12,7 +12,9 @@ import { JobQueue } from "./JobQueue";
 import { Footer } from "./Footer";
 import WorkExperience from "./WorkExperience";
 import { useScrollAnimation } from "./hooks/useScrollAnimation";
+import { useToast } from "./hooks/useToast";
 import { FileUpload } from "./FileUpload";
+import { ToastContainer } from "./Toast";
 import { APIProvider } from '@vis.gl/react-google-maps';
 
 interface UploadedResume {
@@ -55,13 +57,14 @@ interface ApplicationItem {
 
 export function Dashboard() {
   const { ref, isVisible } = useScrollAnimation(0.2);
+  const { toasts, success, error, info, removeToast } = useToast();
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
   const [workExperience, setWorkExperience] = useState<WorkExperienceItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sendAsUser, setSendAsUser] = useState(true);
   const [userEmail, setUserEmail] = useState('');
   const [hasGmailOAuth, setHasGmailOAuth] = useState(false);
-  const [activeTab, setActiveTab] = useState<'matches' | 'applications' | 'settings'>('matches');
+  const [activeTab, setActiveTab] = useState<'auto-apply' | 'matches' | 'applications' | 'settings'>('auto-apply');
   const [userApplications, setUserApplications] = useState<ApplicationItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showUploadView, setShowUploadView] = useState(false);
@@ -104,6 +107,7 @@ export function Dashboard() {
   const [replacementsRemaining, setReplacementsRemaining] = useState(3);
   const [canReplace, setCanReplace] = useState(true);
   const [hoursUntilReset, setHoursUntilReset] = useState(0);
+  const [totalPotentialMatches, setTotalPotentialMatches] = useState(0);
 
   const itemsPerPage = 10;
   useEffect(() => {
@@ -114,11 +118,12 @@ export function Dashboard() {
     fetchUserApplications();
     fetchAccountInfo();
     fetchResumeReplacementStatus();
+    fetchMatchedJobsCount();
   }, []);
 
-  // Fetch settings when settings tab is opened
+  // Fetch settings when settings or auto-apply tab is opened
   useEffect(() => {
-    if (activeTab === 'settings') {
+    if (activeTab === 'settings' || activeTab === 'auto-apply') {
       fetchUserSettings();
       fetchAccountInfo();
     }
@@ -296,6 +301,25 @@ const fetchOAuthStatus = async () => {
   }
 };
 
+const fetchMatchedJobsCount = async () => {
+  try {
+    const response = await fetch('/api/leads/relevant', {
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      setTotalPotentialMatches(result.total_potential_matches || 0);
+    }
+  } catch (error) {
+    console.error('Error fetching matched jobs count:', error);
+  }
+};
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -337,7 +361,7 @@ const fetchOAuthStatus = async () => {
 
   const handleStartApplying = () => {
     // This will trigger the bulk application process
-    alert('Starting to apply to all jobs! This feature is coming soon.');
+    info('Starting to apply to all jobs! This feature is coming soon.');
   };
 
   const fetchUserApplications = async () => {
@@ -415,7 +439,7 @@ const fetchOAuthStatus = async () => {
         setHideFromCurrentEmployer(settings.hide_from_current_employer ?? false);
 
         // Auto-apply settings
-        setAutoApplyEnabled(settings.auto_apply_enabled ?? false);
+        setAutoApplyEnabled(Boolean(settings.auto_apply_enabled));
         setAutoApplyFrequency(settings.auto_apply_frequency ?? 'hourly');
         setAutoApplyMaxPerPeriod(settings.auto_apply_max_per_period ?? 10);
         setAutoApplyRelevance(settings.auto_apply_relevance ?? 'high');
@@ -480,23 +504,80 @@ const fetchOAuthStatus = async () => {
       });
 
       if (response.ok) {
-        alert('Settings saved successfully!');
+        success('Settings saved successfully!');
       } else {
-        const error = await response.json();
-        console.error('Save failed:', error);
-        alert(`Failed to save settings: ${error.error || error.message || 'Unknown error'}`);
+        const errorData = await response.json();
+        console.error('Save failed:', errorData);
+        error(`Failed to save settings: ${errorData.error || errorData.message || 'Unknown error'}`);
       }
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      alert('Failed to save settings. Please try again.');
+    } catch (err) {
+      console.error('Error saving settings:', err);
+      error('Failed to save settings. Please try again.');
     } finally {
       setIsSavingSettings(false);
     }
   };
 
+  // Helper function to save individual settings
+  const saveSettings = async (partialSettings: any) => {
+    try {
+      // Build the full settings object with current values
+      const settingsData = {
+        notify_new_matches: notifyNewMatches,
+        notify_application_updates: notifyApplicationUpdates,
+        email_digest_frequency: emailDigestFrequency,
+        min_salary: minSalary[0],
+        max_salary: maxSalary[0],
+        preferred_location: preferredLocation,
+        preferred_job_title: preferredJobTitle,
+        employment_types: employmentTypes,
+        work_arrangement: workArrangement,
+        willing_to_relocate: willingToRelocate,
+        max_applications_per_day: maxApplicationsPerDay,
+        show_to_recruiters: showToRecruiters,
+        hide_from_current_employer: hideFromCurrentEmployer,
+        auto_apply_enabled: autoApplyEnabled,
+        auto_apply_frequency: autoApplyFrequency,
+        auto_apply_max_per_period: autoApplyMaxPerPeriod,
+        auto_apply_relevance: autoApplyRelevance,
+        notification_frequency: notificationFrequency,
+        timezone: timezone,
+        match_email_frequency: matchEmailFrequency,
+        ...partialSettings, // Override with partial settings
+      };
+
+      // Fetch CSRF token
+      const tokenResponse = await fetch('/api/csrf-token', {
+        credentials: 'include',
+      });
+      const csrfToken = await tokenResponse.json();
+
+      const headers: Record<string, string> = {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken.token,
+      };
+
+      const response = await fetch('/api/user/settings', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify(settingsData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Save failed:', error);
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== 'DELETE') {
-      alert('Please type DELETE to confirm');
+      info('Please type DELETE to confirm');
       return;
     }
 
@@ -523,13 +604,13 @@ const fetchOAuthStatus = async () => {
         // Redirect to home page after successful deletion
         window.location.href = '/';
       } else {
-        const error = await response.json();
-        console.error('Delete failed:', error);
-        alert(`Failed to delete account: ${error.error || error.message || 'Unknown error'}`);
+        const errorData = await response.json();
+        console.error('Delete failed:', errorData);
+        error(`Failed to delete account: ${errorData.error || errorData.message || 'Unknown error'}`);
       }
-    } catch (error) {
-      console.error('Error deleting account:', error);
-      alert('Failed to delete account. Please try again.');
+    } catch (err) {
+      console.error('Error deleting account:', err);
+      error('Failed to delete account. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -614,10 +695,24 @@ const fetchOAuthStatus = async () => {
 
   return (
     <div ref={ref} className="flex flex-col min-h-screen dashboard-bg">
+      <ToastContainer toasts={toasts} onClose={removeToast} />
       <div className="flex-1 p-8">
         <div className="w-full space-y-8">
           {/* Tabs */}
           <div className="flex items-center gap-8 border-b border-border">
+            <button
+              onClick={() => setActiveTab('auto-apply')}
+              className={`pb-4 px-2 text-sm font-medium transition-colors relative ${
+                activeTab === 'auto-apply'
+                  ? 'text-primary'
+                  : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+              }`}
+            >
+              Auto-Apply
+              {activeTab === 'auto-apply' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+            </button>
             <button
               onClick={() => setActiveTab('matches')}
               className={`pb-4 px-2 text-sm font-medium transition-colors relative ${
@@ -661,10 +756,239 @@ const fetchOAuthStatus = async () => {
 
           {/* Main Content Grid */}
           {/* Dashboard Content */}
+        {activeTab === 'auto-apply' && (
+          <div className="max-w-4xl mx-auto mt-8">
+            <div
+              className="p-8 rounded-xl border border-border"
+              style={{
+                background: 'linear-gradient(to bottom right, #eff6ff, #faf5ff)'
+              }}
+            >
+              {/* Welcome Message */}
+              <div className="mb-8">
+                <h2 className="text-foreground mb-3">
+                  Hi, welcome to your AI recruiter
+                </h2>
+                <p className="text-muted-foreground text-lg mb-4">
+                  We found <span className="text-primary font-semibold">
+                    {(() => {
+                      const queueCount = Math.floor(totalPotentialMatches * 3.5);
+                      return queueCount < 200 ? '300+' : `${queueCount}+`;
+                    })()} jobs
+                  </span> matching your experience
+                </p>
+                <p className="text-muted-foreground">
+                  Click enable auto-apply to let us start reaching out to employers for you!
+                </p>
+              </div>
+
+              {/* Auto-Apply Toggle */}
+              <div className="bg-white rounded-lg p-6 mb-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-foreground font-semibold mb-2">Auto-Apply Status</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {autoApplyEnabled ? 'AI is actively applying to jobs for you' : 'Enable to start automatic applications'}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setAutoApplyEnabled(!autoApplyEnabled);
+                      saveSettings({ auto_apply_enabled: !autoApplyEnabled });
+                    }}
+                    className={`px-6 py-6 text-base transition-all duration-200 ${
+                      autoApplyEnabled
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : 'bg-primary hover:bg-primary/90'
+                    }`}
+                  >
+                    {autoApplyEnabled ? '✓ Enabled' : 'Enable Auto-Apply'}
+                  </Button>
+                </div>
+
+                {autoApplyEnabled && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2 animate-pulse"></div>
+                    <div>
+                      <p className="text-sm font-medium text-green-900">Auto-Apply is Active</p>
+                      <p className="text-sm text-green-700 mt-1">
+                        Your AI recruiter is working around the clock to find and apply to the best opportunities for you.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Settings */}
+              <div className="bg-white rounded-lg p-6">
+                <h3 className="text-foreground font-semibold mb-6">Auto-Apply Settings</h3>
+
+                <div className="space-y-6">
+                  {/* Max Applications Per Day */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <label className="text-sm font-medium text-foreground">
+                          Max Applications Per Day
+                        </label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Control how many applications to send daily
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newValue = Math.max(1, maxApplicationsPerDay - 5);
+                            setMaxApplicationsPerDay(newValue);
+                            saveSettings({ max_applications_per_day: newValue });
+                          }}
+                          disabled={maxApplicationsPerDay <= 1}
+                        >
+                          -
+                        </Button>
+                        <span className="text-xl font-semibold text-foreground min-w-12 text-center">
+                          {maxApplicationsPerDay}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newValue = Math.min(50, maxApplicationsPerDay + 5);
+                            setMaxApplicationsPerDay(newValue);
+                            saveSettings({ max_applications_per_day: newValue });
+                          }}
+                          disabled={maxApplicationsPerDay >= 50}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="relative pt-1">
+                      <input
+                        type="range"
+                        min="1"
+                        max="50"
+                        value={maxApplicationsPerDay}
+                        onChange={(e) => {
+                          setMaxApplicationsPerDay(Number(e.target.value));
+                        }}
+                        onMouseUp={(e) => saveSettings({ max_applications_per_day: Number((e.target as HTMLInputElement).value) })}
+                        onTouchEnd={(e) => saveSettings({ max_applications_per_day: Number((e.target as HTMLInputElement).value) })}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                        <span>1</span>
+                        <span>25</span>
+                        <span>50</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notification Frequency */}
+                  <div>
+                    <label className="text-sm font-medium text-foreground block mb-3">
+                      Notification Frequency
+                    </label>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Choose how often you want to receive application updates
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                      {['real-time', 'daily', 'weekly'].map((freq) => (
+                        <button
+                          key={freq}
+                          onClick={() => {
+                            setNotificationFrequency(freq === 'real-time' ? 'realtime' : freq as 'realtime' | 'daily' | 'weekly' | 'none');
+                            saveSettings({ notification_frequency: freq === 'real-time' ? 'realtime' : freq });
+                          }}
+                          className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                            (notificationFrequency === 'realtime' && freq === 'real-time') || notificationFrequency === freq
+                              ? 'border-primary bg-blue-50'
+                              : 'border-border hover:border-gray-300 bg-white'
+                          }`}
+                        >
+                          <div className="font-medium text-foreground capitalize mb-1">
+                            {freq === 'real-time' ? 'Real-Time' : freq.charAt(0).toUpperCase() + freq.slice(1)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {freq === 'real-time' && 'Instant notifications'}
+                            {freq === 'daily' && 'Once per day digest'}
+                            {freq === 'weekly' && 'Weekly summary'}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Stats Preview */}
+                  <div className="border-t border-border pt-6 mt-6">
+                    <h4 className="text-sm font-medium text-foreground mb-4">Activity Preview</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                      <div className="bg-gray-50 rounded-lg p-4 text-center">
+                        <div className="text-2xl font-semibold text-foreground">
+                          {autoApplyEnabled ? maxApplicationsPerDay : 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Applications/Day
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 text-center">
+                        <div className="text-2xl font-semibold text-foreground">
+                          {(() => {
+                            const queueCount = Math.floor(totalPotentialMatches * 3.5);
+                            return queueCount < 200 ? '300+' : `${queueCount}+`;
+                          })()}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Jobs in Queue
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 text-center">
+                        <div className="text-2xl font-semibold text-foreground">
+                          {autoApplyEnabled ? (() => {
+                            const queueCount = Math.floor(totalPotentialMatches * 3.5);
+                            const actualCount = queueCount < 200 ? 300 : queueCount;
+                            return Math.ceil(actualCount / maxApplicationsPerDay);
+                          })() : '—'}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Days to Complete
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'matches' && (
           <>
-          {/* Upgrade Banner for non-Pro users */}
-          {(!hasSubscription || subscriptionPlan !== 'pro') && (
+          {/* Auto-Apply Banner */}
+          {subscriptionPlan === 'pro' && !autoApplyEnabled ? (
+            // Green banner for Pro users to enable auto-apply
+            <div
+              className="mb-6 p-3 rounded-lg border text-center"
+              style={{
+                backgroundColor: '#f0fdf4',
+                borderColor: '#86efac'
+              }}
+            >
+              <p className="text-sm" style={{ color: '#166534' }}>
+                🎉 You have Pro access! Enable Auto-Apply to automatically submit applications to high-quality jobs that match your profile.{' '}
+                <button
+                  onClick={() => setActiveTab('auto-apply')}
+                  className="font-semibold underline"
+                  style={{ color: '#15803d' }}
+                >
+                  Enable Auto-Apply Now!
+                </button>
+              </p>
+            </div>
+          ) : (!hasSubscription || subscriptionPlan !== 'pro') ? (
+            // Yellow banner for non-Pro users to upgrade
             <div
               className="mb-6 p-3 rounded-lg border text-center"
               style={{
@@ -683,7 +1007,7 @@ const fetchOAuthStatus = async () => {
                 </a>
               </p>
             </div>
-          )}
+          ) : null}
 
           <div className="flex gap-6 fade-in fade-in-delay-1 visible">
             {/* Left Column - Resume Preview */}
@@ -1358,7 +1682,7 @@ const fetchOAuthStatus = async () => {
                             variant={hasSubscription ? undefined : "secondary"}
                             className={hasSubscription ? "border-transparent" : ""}
                           >
-                            {hasSubscription ? (subscriptionPlan === 'pro' ? 'Pro Tier' : 'Starter Tier') : "Unsubscribed"}
+                            {hasSubscription ? (subscriptionPlan === 'pro' ? 'Pro Enabled' : 'Starter Enabled') : "No Plan"}
                           </Badge>
                         </div>
                       </div>

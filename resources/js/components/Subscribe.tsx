@@ -4,6 +4,8 @@ import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft, Check, Sparkles, Rocket } from 'lucide-react';
+import { useToast } from './hooks/useToast';
+import { ToastContainer } from './Toast';
 
 // Stripe promise will be initialized after fetching config
 let stripePromise: Promise<any> | null = null;
@@ -14,6 +16,7 @@ interface SubscribeProps {
 }
 
 export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
+  const { toasts, success, error: showError, info, removeToast } = useToast();
   // TEMPORARY: Set to null for normal flow, or set to a price_id to test checkout directly
   const [priceId, setPriceId] = useState<string | null>(null); // Change to price ID to test checkout
   const [pricingConfig, setPricingConfig] = useState<any>(null);
@@ -157,7 +160,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
 
       if (data.already_subscribed) {
         // User is already on this plan
-        alert(data.error || 'You are already subscribed to this plan.');
+        info(data.error || 'You are already subscribed to this plan.');
         setPriceId(null); // Go back to plan selection
         return;
       }
@@ -203,7 +206,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   const plans = (pricingConfig && pricingConfig.prices) ? [
     {
       name: "Self Starter Tier",
-      price: "$29",
+      price: "$19",
       period: "per month",
       description: "Perfect for individual job seekers getting started",
       icon: <Sparkles className="h-8 w-8" />,
@@ -218,7 +221,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
     },
     {
       name: "Pro User Tier",
-      price: "$79",
+      price: "$49",
       period: "per month",
       description: "For serious professionals maximizing their job search",
       icon: <Rocket className="h-8 w-8" />,
@@ -243,6 +246,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
+        <ToastContainer toasts={toasts} onClose={removeToast} />
         <div className="flex items-center space-x-2">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
           <span className="text-primary">Loading pricing...</span>
@@ -255,6 +259,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
+        <ToastContainer toasts={toasts} onClose={removeToast} />
         <div className="text-center max-w-md mx-auto px-6">
           <div className="mb-6">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
@@ -282,6 +287,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   if (!priceId) {
     return (
       <div className="min-h-screen bg-white">
+        <ToastContainer toasts={toasts} onClose={removeToast} />
         {/* Hero Section */}
         <section className="bg-gradient-to-br from-[#F7F8FA] to-white pt-20 pb-16">
           <div className="max-w-7xl mx-auto px-6">
@@ -431,6 +437,7 @@ export function Subscribe({ onBack, isAuthenticated = false }: SubscribeProps) {
   // Show embedded checkout
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5F8FF] to-white">
+      <ToastContainer toasts={toasts} onClose={removeToast} />
       <div className="pt-12 pb-8">
         <div className="max-w-4xl mx-auto px-6">
           <Button

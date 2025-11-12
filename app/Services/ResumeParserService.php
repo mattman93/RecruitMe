@@ -394,12 +394,16 @@ class ResumeParserService
                 $errorMessage = $e->getMessage();
                 Log::warning("OpenAI parsing attempt {$attempt} failed: " . $errorMessage);
 
-                // Check if it's a rate limit or timeout error - retry both
+                // Check if it's a rate limit, timeout, or JSON error - retry all
                 $isRetryable = str_contains($errorMessage, 'rate limit') ||
                                str_contains($errorMessage, 'Rate limit') ||
                                str_contains($errorMessage, 'timed out') ||
                                str_contains($errorMessage, 'timeout') ||
-                               str_contains($errorMessage, 'Operation timed out');
+                               str_contains($errorMessage, 'Operation timed out') ||
+                               str_contains($errorMessage, 'Syntax error') ||
+                               str_contains($errorMessage, 'syntax error') ||
+                               str_contains($errorMessage, 'JSON') ||
+                               str_contains($errorMessage, 'json');
 
                 if ($isRetryable && $attempt < $maxRetries) {
                     $delay = $retryDelay * pow(2, $attempt - 1); // Exponential backoff: 1s, 2s, 4s

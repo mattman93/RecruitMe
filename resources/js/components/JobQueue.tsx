@@ -8,6 +8,8 @@ import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { JobApplicationModal } from "./JobApplicationModal";
 import { ViewJobDescription } from "./ViewJobDescription";
+import { useToast } from "./hooks/useToast";
+import { ToastContainer } from "./Toast";
 
 interface JobQueueProps {
   userEmail?: string;
@@ -42,6 +44,7 @@ interface Lead {
 
 
 export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
+  const { toasts, success, error: showError, info, removeToast } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +59,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
   const [hasSubscription, setHasSubscription] = useState<boolean>(false);
   const [subscriptionPlan, setSubscriptionPlan] = useState<'starter' | 'pro' | null>(null);
   const [autoApplyEnabled, setAutoApplyEnabled] = useState<boolean>(false);
-  const [showAutoApplyBanner, setShowAutoApplyBanner] = useState<boolean>(false);
 
   // Application processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -226,11 +228,6 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
         // Check auto-apply configuration
         const autoApplyConfigured = settings?.auto_apply_enabled || false;
         setAutoApplyEnabled(autoApplyConfigured);
-
-        // Show banner if user has Pro subscription but hasn't configured auto-apply
-        const dismissed = localStorage.getItem('autoApplyBannerDismissed');
-        const isPro = subscriptionPlan === 'pro';
-        setShowAutoApplyBanner(isPro && !autoApplyConfigured && !dismissed);
       }
     } catch (error) {
       console.error('Error fetching user settings:', error);
@@ -402,7 +399,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
       // Check if there are jobs to apply to
       if (activeLeads.length === 0) {
-        alert('No jobs available to apply to. Please wait for new jobs to load.');
+        info('No jobs available to apply to. Please wait for new jobs to load.');
         return;
       }
 
@@ -477,7 +474,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
       console.error('Error starting applications:', error);
       setIsProcessing(false);
       setAnimationStage('idle');
-      alert('Failed to start applications. Please try again.');
+      showError('Failed to start applications. Please try again.');
     }
   };
 
@@ -657,52 +654,9 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
 
   const buttonContent = getButtonContent();
 
-  const handleDismissBanner = () => {
-    localStorage.setItem('autoApplyBannerDismissed', 'true');
-    setShowAutoApplyBanner(false);
-  };
-
-  const handleConfigureAutoApply = () => {
-    // This will be handled by parent component (Dashboard) to switch to settings tab
-    const event = new CustomEvent('openSettings', { detail: { section: 'auto-apply' } });
-    window.dispatchEvent(event);
-    handleDismissBanner();
-  };
-
   return (
     <div className="space-y-6">
-      {/* Auto-Apply Banner */}
-      {showAutoApplyBanner && (
-        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-500 p-4 rounded-md shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="h-5 w-5 text-amber-600" />
-              <div>
-                <h4 className="font-semibold text-gray-900">Auto-Apply is Available!</h4>
-                <p className="text-sm text-gray-700">
-                  Let AppliFlow automatically apply to jobs for you.
-                  <button
-                    onClick={handleConfigureAutoApply}
-                    className="ml-1 text-amber-700 underline font-medium hover:text-amber-800"
-                  >
-                    Configure now
-                  </button>
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleDismissBanner}
-              className="text-gray-500 hover:text-gray-700 p-1"
-              aria-label="Dismiss"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-
+      <ToastContainer toasts={toasts} onClose={removeToast} />
       {/* Header */}
       <div className="flex items-center justify-between pt-8">
         <div className="flex items-center gap-3">
@@ -727,7 +681,7 @@ export function JobQueue({ userEmail, hasGmailOAuth }: JobQueueProps) {
               }}
               className="px-3 py-1 border-transparent font-semibold"
             >
-              Subscribed
+              {subscriptionPlan === 'pro' ? 'Pro Enabled' : 'Starter Enabled'}
             </Badge>
           ) : (
             <Badge

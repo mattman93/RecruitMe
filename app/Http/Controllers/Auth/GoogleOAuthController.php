@@ -42,16 +42,19 @@ class GoogleOAuthController extends Controller
             $user = User::where('email', $googleUser->email)->first();
 
             if (!$user) {
-                // Create new user
+                // Create new user with 1 month free Pro
                 $user = User::create([
                     'name' => $googleUser->name,
                     'email' => $googleUser->email,
                     'google_id' => $googleUser->id,
                     'avatar' => $googleUser->avatar,
                     'email_verified_at' => now(),
+                    'subscription_plan' => 'pro',
+                    'subscription_status' => 'active',
+                    'subscription_ends_at' => now()->addMonth(),
                 ]);
 
-                Log::info('Created new user from Google OAuth', ['user_id' => $user->id]);
+                Log::info('Created new user from Google OAuth with 1 month free Pro', ['user_id' => $user->id]);
             } else {
                 // Update existing user with Google info
                 $user->update([

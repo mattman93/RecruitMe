@@ -17,17 +17,17 @@ class UserSettingsController extends Controller
     {
         $user = Auth::user();
 
-        // Get or create user settings with defaults
+        // Get or create user settings with defaults (no filter defaults)
         $settings = UserSettings::firstOrCreate(
             ['user_id' => $user->id],
             [
                 'notify_new_matches' => true,
                 'notify_application_updates' => true,
                 'email_digest_frequency' => 'daily',
-                'min_salary' => 100,
-                'max_salary' => 150,
-                'employment_types' => ['fullTime' => true, 'contract' => false, 'partTime' => false],
-                'work_arrangement' => ['remote' => true, 'hybrid' => true, 'onsite' => false],
+                'min_salary' => null,
+                'max_salary' => null,
+                'employment_types' => null,
+                'work_arrangement' => null,
                 'willing_to_relocate' => false,
                 'queue_auto_apply' => false,
                 'autonomous_auto_apply' => false,
@@ -83,9 +83,10 @@ class UserSettingsController extends Controller
             'show_to_recruiters' => 'boolean',
             'hide_from_current_employer' => 'boolean',
             'auto_apply_enabled' => 'boolean',
-            'auto_apply_frequency' => 'in:daily,weekly',
+            'auto_apply_frequency' => 'in:hourly,daily,weekly',
             'auto_apply_max_per_period' => 'integer|min:1|max:25',
             'auto_apply_relevance' => 'in:high,medium,broad',
+            'notification_frequency' => 'in:realtime,daily,weekly,none',
             'timezone' => 'nullable|string|timezone',
             'match_email_frequency' => 'in:daily,weekly,never',
         ]);
