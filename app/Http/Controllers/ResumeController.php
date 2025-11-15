@@ -101,6 +101,20 @@ class ResumeController extends Controller
                 Log::info('Starting resume parsing', ['file_path' => $path, 'user_id' => $user->id]);
                 $parsedResume = $parserService->parseResumeFromStorage($path, $user->id);
                 Log::info('Resume parsed successfully', ['parsed_resume_id' => $parsedResume->id]);
+
+                // Update user record with resume references
+                $user->update([
+                    'resume_path' => $path,
+                    'parsed_resume_id' => $parsedResume->id,
+                    'active_uploaded_file_id' => $uploadedFile->id,
+                ]);
+
+                Log::info('User record updated with resume references', [
+                    'user_id' => $user->id,
+                    'resume_path' => $path,
+                    'parsed_resume_id' => $parsedResume->id,
+                    'uploaded_file_id' => $uploadedFile->id
+                ]);
             } catch (\Exception $e) {
                 Log::error('Failed to parse resume', [
                     'error' => $e->getMessage(),

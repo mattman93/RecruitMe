@@ -24,6 +24,9 @@ class User extends Authenticatable
         'password',
         'google_id',
         'avatar',
+        'resume_path',
+        'parsed_resume_id',
+        'active_uploaded_file_id',
         'user_role',
         'credits',
         'credits_used',
@@ -91,6 +94,16 @@ class User extends Authenticatable
         return $this->hasMany(ParsedResume::class)->orderBy('parsed_at', 'desc');
     }
 
+    public function activeParsedResume()
+    {
+        return $this->belongsTo(ParsedResume::class, 'parsed_resume_id');
+    }
+
+    public function activeUploadedFile()
+    {
+        return $this->belongsTo(UploadedFile::class, 'active_uploaded_file_id');
+    }
+
     public function settings()
     {
         return $this->hasOne(UserSettings::class);
@@ -106,7 +119,7 @@ class User extends Authenticatable
      */
     public function hasResume(): bool
     {
-        return $this->uploadedFiles()->where('file_type', 'resume')->exists();
+        return !empty($this->resume_path) || $this->uploadedFiles()->where('file_type', 'resume')->where('is_active', true)->exists();
     }
 
     /**

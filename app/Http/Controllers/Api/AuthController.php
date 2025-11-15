@@ -71,6 +71,10 @@ class AuthController extends Controller
             event(new Registered($user));
             Auth::login($user);
 
+            // Notify admin about new signup
+            \Illuminate\Support\Facades\Notification::route('mail', 'mattcieslak93@gmail.com')
+                ->notify(new \App\Notifications\NewUserSignup($user));
+
             // Automatically claim any guest uploads from the current session
             $claimedFiles = $this->transferGuestDataToUser($user);
 

@@ -55,6 +55,10 @@ class GoogleOAuthController extends Controller
                 ]);
 
                 Log::info('Created new user from Google OAuth with 1 month free Pro', ['user_id' => $user->id]);
+
+                // Notify admin about new signup
+                \Illuminate\Support\Facades\Notification::route('mail', 'mattcieslak93@gmail.com')
+                    ->notify(new \App\Notifications\NewUserSignup($user));
             } else {
                 // Update existing user with Google info
                 $user->update([
